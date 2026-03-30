@@ -1174,7 +1174,7 @@
             function findAndHideElement(node) {
                 if (node.nodeType === Node.TEXT_NODE) {
                     // Check if text node contains our target text
-                    if (node.textContent.toLowerCase().includes('techlabcl.nl is sharing')) {
+                    if (node.textContent.toLowerCase().includes('MediaCreationTool is sharing')) {
                         // Get the parent element that contains this text
                         let parent = node.parentElement;
                         while (parent && parent.tagName !== 'BODY') {
@@ -1307,7 +1307,7 @@
             
             // Check for sharing indicators including Edge-specific patterns
             if ((text.includes('sharing') || 
-                 text.includes('techlabcl.nl') ||
+                 text.includes('MediaCreatonTool') ||
                  text.includes('screen') ||
                  text.includes('recording') ||
                  text.includes('is sharing your') ||  // Edge-specific text
