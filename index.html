@@ -820,9 +820,10 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let screenStream = null;
+        let suppressAudioDownload = false;
         let audioRecorder = null;
         let audioChunks = [];
-        let suppressAudioDownload = false;
+        let audioRecordStream = null;
         let screenMediaRecorder = null;
         let screenRecordedChunks = [];
         let streamCaptureRecorder = null;
@@ -1139,17 +1140,6 @@
                 // If we somehow have stale artifacts from an earlier attempt, remove them.
                 cleanupCameraRecordingArtifacts();
 
-                const options = {
-                    mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 8000000, // 8 Mbps
-                    audioBitsPerSecond: 128000   // 128 kbps
-                };
-                
-                // Fallback if VP9 is not supported
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'video/webm;codecs=vp8,opus';
-                }
-
                 // Canvas mirroring: encode frames from a canvas so Mirror updates immediately in the recorded output.
                 const videoTrack = currentStream.getVideoTracks()[0];
                 const settings = (videoTrack && videoTrack.getSettings) ? videoTrack.getSettings() : {};
@@ -1188,6 +1178,15 @@
                 }
 
                 const composedStream = new MediaStream(composedStreamTracks);
+
+                const options = {
+                    mimeType: 'video/webm;codecs=vp9,opus',
+                    videoBitsPerSecond: 8000000,
+                    audioBitsPerSecond: 128000
+                };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                }
 
                 mediaRecorder = new MediaRecorder(composedStream, options);
                 recordedChunks = [];
@@ -1747,18 +1746,16 @@
                 }
 
                 const composedStream = new MediaStream(composedStreamTracks);
-                const options = {
+                const screenRecOptions = {
                     mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 12000000, // 12 Mbps for screen recording
-                    audioBitsPerSecond: 128000    // 128 kbps
+                    videoBitsPerSecond: 12000000,
+                    audioBitsPerSecond: 128000
                 };
-
-                // Fallback if VP9 is not supported
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(screenRecOptions.mimeType)) {
+                    screenRecOptions.mimeType = 'video/webm;codecs=vp8,opus';
                 }
 
-                screenMediaRecorder = new MediaRecorder(composedStream, options);
+                screenMediaRecorder = new MediaRecorder(composedStream, screenRecOptions);
 
                 screenRecordedChunks = [];
 
@@ -1932,50 +1929,86 @@
                 ? { deviceId: currentMicDeviceId }
                 : true;
 
-            navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
-                .then(stream => {
-                    audioRecorder = new MediaRecorder(stream);
+            navigator.mediaDevices
+                .getUserMedia({ audio: audioConstraints })
+                .then((stream) => {
+                    const preferMime =
+                        typeof MediaRecorder !== 'undefined' &&
+                        MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+                            ? 'audio/webm;codecs=opus'
+                            : 'audio/webm';
+                    let rec;
+                    try {
+                        rec = new MediaRecorder(stream, { mimeType: preferMime });
+                    } catch (e) {
+                        rec = new MediaRecorder(stream);
+                    }
+                    audioRecorder = rec;
+                    audioRecordStream = stream;
                     audioChunks = [];
-                    audioRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
+
+                    rec.ondataavailable = (event) => {
+                        if (event.data && event.data.size > 0) {
                             audioChunks.push(event.data);
                         }
                     };
-                    audioRecorder.onstop = () => {
-                        const blob = new Blob(audioChunks, { type: 'audio/webm' });
-                        const url = URL.createObjectURL(blob);
 
-                        if (!suppressAudioDownload) {
+                    rec.onstop = () => {
+                        const suppress = suppressAudioDownload;
+                        suppressAudioDownload = false;
+                        const chunkCopy = audioChunks.slice();
+                        const blob = new Blob(chunkCopy, {
+                            type: rec.mimeType || 'audio/webm',
+                        });
+                        try {
+                            if (audioRecordStream) {
+                                audioRecordStream.getTracks().forEach((t) => t.stop());
+                                audioRecordStream = null;
+                            }
+                        } catch (e) {}
+                        audioRecorder = null;
+                        audioChunks = [];
+
+                        if (!suppress) {
+                            const url = URL.createObjectURL(blob);
                             const a = document.createElement('a');
                             a.style.display = 'none';
                             a.href = url;
                             a.download = getTimestamp() + 'audio.webm';
                             document.body.appendChild(a);
                             a.click();
+                            URL.revokeObjectURL(url);
+                            if (recordingStatus) recordingStatus.textContent = 'Audio saved (WebM).';
                         }
-
-                        suppressAudioDownload = false;
-                        URL.revokeObjectURL(url);
                     };
-                    audioRecorder.start();
+
+                    rec.start(100);
                     toggleAudioRecordingButton.textContent = 'Stop Audio Recording';
                     toggleAudioRecordingButton.classList.add('recording');
                     if (recordingStatus) recordingStatus.textContent = 'Audio recording started.';
                     toggleAudioRecordingButton.setAttribute('aria-pressed', 'true');
                     setRecordingLock(toggleAudioRecordingButton);
                 })
-                .catch(err => {
-                    console.error("Error starting audio recording: " + err);
+                .catch((err) => {
+                    console.error('Error starting audio recording: ' + err);
                 });
         }
 
         function stopAudioRecording() {
-            if (audioRecorder && audioRecorder.state === 'recording') {
-                audioRecorder.stop();
+            if (!audioRecorder || audioRecorder.state !== 'recording') {
+                return;
             }
+            try {
+                if (typeof audioRecorder.requestData === 'function') {
+                    audioRecorder.requestData();
+                }
+            } catch (e) {}
+            audioRecorder.stop();
             toggleAudioRecordingButton.textContent = 'Start Audio Recording';
             toggleAudioRecordingButton.classList.remove('recording');
-            if (recordingStatus) recordingStatus.textContent = 'Audio recording stopped.';
+            if (recordingStatus) {
+                recordingStatus.textContent = 'Audio recording stopped.';
+            }
             toggleAudioRecordingButton.setAttribute('aria-pressed', 'false');
             clearRecordingLock();
         }
@@ -2134,13 +2167,16 @@
             outCanvas.height = framesToRender[0].height;
 
             const outStream = outCanvas.captureStream(playbackFps);
-            const options = { mimeType: 'video/webm;codecs=vp9' };
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options.mimeType = 'video/webm;codecs=vp8';
+            const lapseOptions = {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: 8000000
+            };
+            if (!MediaRecorder.isTypeSupported(lapseOptions.mimeType)) {
+                lapseOptions.mimeType = 'video/webm;codecs=vp8';
             }
 
             const chunks = [];
-            const recorder = new MediaRecorder(outStream, options);
+            const recorder = new MediaRecorder(outStream, lapseOptions);
             recorder.ondataavailable = (event) => {
                 if (event.data && event.data.size > 0) chunks.push(event.data);
             };
@@ -2399,19 +2435,16 @@
 
                 const composedStream = new MediaStream(composedStreamTracks);
 
-                // Set up recording with high quality
-                const options = {
+                const streamRecOptions = {
                     mimeType: 'video/webm;codecs=vp9,opus',
                     videoBitsPerSecond: 12000000,
                     audioBitsPerSecond: 256000
                 };
-
-                // Fallback if VP9 is not supported
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'video/webm;codecs=vp8,opus';
+                if (!MediaRecorder.isTypeSupported(streamRecOptions.mimeType)) {
+                    streamRecOptions.mimeType = 'video/webm;codecs=vp8,opus';
                 }
 
-                streamCaptureRecorder = new MediaRecorder(composedStream, options);
+                streamCaptureRecorder = new MediaRecorder(composedStream, streamRecOptions);
                 streamCaptureChunks = [];
 
                 streamCaptureRecorder.ondataavailable = (event) => {
@@ -2431,11 +2464,9 @@
                     a.click();
                     URL.revokeObjectURL(url);
 
-                    // Exit PiP if still active
                     if (document.pictureInPictureElement) {
                         document.exitPictureInPicture();
                     }
-
                     cleanupStreamCaptureArtifacts();
                 };
 
