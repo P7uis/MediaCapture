@@ -14,7 +14,7 @@
 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediaCreatiionTool</title>
+    <title>MediaCreationTool</title>
     <link rel="icon" type="image/x-icon" href="/images/glados.ico">
     <style>
         body {
@@ -32,6 +32,71 @@
             text-align: center;
             width: 90%;
             max-width: 640px;
+        }
+        .preview-row {
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+        }
+        .preview-video-wrap {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+            overflow: hidden;
+            border-radius: 2px;
+            background: #111;
+        }
+        .video-digital-zoom {
+            width: 100%;
+            transform-origin: center center;
+            will-change: transform;
+        }
+        .zoom-column {
+            flex: 0 0 52px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 8px 4px;
+            min-height: 180px;
+            background: rgba(0, 0, 0, 0.04);
+            border-radius: 6px;
+            border: 1px solid rgba(0, 0, 0, 0.12);
+            cursor: ns-resize;
+        }
+        .zoom-column label {
+            font-size: 11px;
+            color: #222;
+            writing-mode: horizontal-tb;
+            line-height: 1.2;
+        }
+        .zoom-column .zoom-value {
+            display: block;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            margin-top: 2px;
+        }
+        .zoom-slider-slot {
+            flex: 1;
+            min-height: 140px;
+            width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: visible;
+        }
+        .zoom-slider-slot input[type="range"] {
+            width: min(220px, 36vh);
+            height: 32px;
+            margin: 0;
+            transform: rotate(-90deg);
+            transform-origin: center center;
+            cursor: pointer;
+            accent-color: #007bff;
         }
         video {
             display: block;
@@ -209,6 +274,14 @@
         #toggleScreenRecording.recording {
             background-color: #dc3545;
         }
+        #toggleTimelapse {
+            background-color: #343a40;
+            flex: 1 1 0;
+            min-width: 0;
+        }
+        #toggleTimelapse.recording {
+            background-color: #dc3545;
+        }
         #mirrorToggle {
             background-color: #00ff00; /* lime */
         }
@@ -260,6 +333,61 @@
             bottom: 0;
             pointer-events: none;
             z-index: 9998;
+        }
+
+        .timelapse-row {
+            align-items: stretch;
+        }
+        .timelapse-settings {
+            flex: 3 1 0;
+            min-width: 0;
+            margin: 0 5px;
+            min-height: 40px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            align-content: center;
+            justify-content: flex-start;
+            gap: 6px 8px;
+            padding: 6px 10px;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.06);
+            border: 1px solid rgba(0,0,0,0.12);
+            box-sizing: border-box;
+            overflow-x: auto;
+            overflow-y: visible;
+        }
+        .timelapse-duration-summary {
+            flex: 1 1 100%;
+            font-size: 11px;
+            color: #333;
+            line-height: 1.35;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .timelapse-duration-summary strong {
+            color: #111;
+            font-weight: 600;
+        }
+        .timelapse-settings label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #111;
+            white-space: nowrap;
+        }
+        .timelapse-settings input {
+            width: 64px;
+            height: 28px;
+            padding: 0 6px;
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.25);
+            background: #fff;
+            color: #111;
+            box-sizing: border-box;
         }
 
         /* Comprehensive screen sharing indicator hiding */
@@ -569,7 +697,19 @@
 <body>
 
     <div class="container">
-        <video id="video" autoplay muted></video>
+        <div class="preview-row">
+            <div class="preview-video-wrap">
+                <div class="video-digital-zoom" id="videoDigitalZoom">
+                    <video id="video" autoplay muted></video>
+                </div>
+            </div>
+            <div class="zoom-column" id="zoomColumn" title="Scroll wheel to zoom in or out">
+                <label for="zoomSlider">Digital zoom<span class="zoom-value" id="zoomValueLabel" aria-hidden="true">1×</span></label>
+                <div class="zoom-slider-slot">
+                    <input type="range" id="zoomSlider" min="1" max="10" step="0.1" value="1" aria-label="Digital zoom, 1 times to 10 times" title="Digital zoom (1×–10×)">
+                </div>
+            </div>
+        </div>
 
         <div class="device-info">
             <div id="cameraInfo">Selected Camera: None</div>
@@ -594,6 +734,24 @@
                 <button id="toggleStreamCapture" aria-label="Toggle stream capture recording">Start Stream Capture</button>
                 <button id="toggleAudioRecording" aria-label="Toggle audio-only recording">Start Audio Recording</button>
             </div>
+            <div class="button-group timelapse-row">
+                <button id="toggleTimelapse" aria-label="Toggle timelapse capture">Start Timelapse</button>
+                <div class="timelapse-settings" aria-label="Timelapse settings">
+                    <label>
+                        Interval (s)
+                        <input id="timelapseInterval" type="number" min="1" step="1" value="2">
+                    </label>
+                    <label>
+                        Frames
+                        <input id="timelapseFrames" type="number" min="2" step="1" value="601">
+                    </label>
+                    <label>
+                        Playback FPS
+                        <input id="timelapsePlaybackFps" type="number" min="5" step="1" value="30">
+                    </label>
+                    <p class="timelapse-duration-summary" id="timelapseDurationSummary" aria-live="polite"></p>
+                </div>
+            </div>
         </div>
 
         <div class="progress-container" id="progressContainer" style="display:none;">
@@ -617,12 +775,21 @@
         const toggleAudioRecordingButton = document.getElementById('toggleAudioRecording');
         const toggleScreenRecordingButton = document.getElementById('toggleScreenRecording');
         const toggleStreamCaptureButton = document.getElementById('toggleStreamCapture');
+        const toggleTimelapseButton = document.getElementById('toggleTimelapse');
+        const timelapseIntervalInput = document.getElementById('timelapseInterval');
+        const timelapseFramesInput = document.getElementById('timelapseFrames');
+        const timelapsePlaybackFpsInput = document.getElementById('timelapsePlaybackFps');
+        const timelapseDurationSummary = document.getElementById('timelapseDurationSummary');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
         const cameraInfo = document.getElementById('cameraInfo');
         const micInfo = document.getElementById('micInfo');
         const recordingStatus = document.getElementById('recordingStatus');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomColumn = document.getElementById('zoomColumn');
+        const videoDigitalZoom = document.getElementById('videoDigitalZoom');
+        const zoomValueLabel = document.getElementById('zoomValueLabel');
 
         // Lock other recording buttons while one mode is active.
         // This prevents starting multiple recorder types at the same time.
@@ -630,7 +797,8 @@
             recordButton,
             toggleScreenRecordingButton,
             toggleStreamCaptureButton,
-            toggleAudioRecordingButton
+            toggleAudioRecordingButton,
+            toggleTimelapseButton
         ];
         let activeRecordingType = null;
 
@@ -661,6 +829,11 @@
         let streamCaptureChunks = [];
         let pipVideo = null;
         let screenCaptureStarting = false;
+
+        // Timelapse state
+        let timelapseCapturing = false;
+        let timelapseCaptureTimer = null;
+        let timelapseFrames = [];
 
         // Camera-recording pipeline (canvas for mirroring + WebAudio gain for mute).
         let cameraRecordingCanvas = null;
@@ -843,6 +1016,7 @@
                 video.setAttribute('controls', false);
                 video.style.objectFit = 'cover';
 
+                updateZoomUI();
             } catch (err) {
                 console.error("Error starting camera: " + err);
             }
@@ -850,6 +1024,58 @@
 
         function updateMirroring() {
             video.style.transform = mirrorFeed ? 'scaleX(-1)' : 'scaleX(1)';
+        }
+
+        function applyDigitalZoomFromSlider() {
+            if (!videoDigitalZoom || !zoomSlider) return;
+            let z = parseFloat(zoomSlider.value);
+            if (Number.isNaN(z)) z = 1;
+            z = Math.min(10, Math.max(1, z));
+            videoDigitalZoom.style.transform = `scale(${z})`;
+            if (zoomValueLabel) {
+                zoomValueLabel.textContent = (Math.round(z * 10) / 10).toString().replace(/\.0$/, '') + '×';
+            }
+        }
+
+        function updateZoomUI() {
+            if (!zoomSlider) return;
+            zoomSlider.min = '1';
+            zoomSlider.max = '10';
+            zoomSlider.step = '0.1';
+            zoomSlider.value = '1';
+            applyDigitalZoomFromSlider();
+        }
+
+        function getDigitalZoomFactor() {
+            if (!zoomSlider) return 1;
+            const z = parseFloat(zoomSlider.value);
+            if (Number.isNaN(z)) return 1;
+            return Math.min(10, Math.max(1, z));
+        }
+
+        /** Center rectangle in full frame that matches the digital zoom slider (same as CSS scale). */
+        function getDigitalZoomSourceRect(vw, vh) {
+            const z = getDigitalZoomFactor();
+            const sw = vw / z;
+            const sh = vh / z;
+            return { sx: (vw - sw) / 2, sy: (vh - sh) / 2, sw, sh };
+        }
+
+        /** Center-crop to match CSS digital zoom, then scale to dest (recording / photo / timelapse). */
+        function drawVideoWithDigitalZoom(ctx, destW, destH) {
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            if (!vw || !vh || destW < 1 || destH < 1) return;
+            const { sx, sy, sw, sh } = getDigitalZoomSourceRect(vw, vh);
+            if (mirrorFeed) {
+                ctx.save();
+                ctx.translate(destW, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
+                ctx.restore();
+            } else {
+                ctx.drawImage(video, sx, sy, sw, sh, 0, 0, destW, destH);
+            }
         }
 
         async function replaceAudioTrackInCurrentStream(deviceId) {
@@ -992,15 +1218,7 @@
                 const drawFrame = () => {
                     if (!cameraRecordingActive || !cameraRecordingCtx) return;
                     cameraRecordingCtx.clearRect(0, 0, w, h);
-                    if (mirrorFeed) {
-                        cameraRecordingCtx.save();
-                        cameraRecordingCtx.translate(w, 0);
-                        cameraRecordingCtx.scale(-1, 1);
-                        cameraRecordingCtx.drawImage(video, 0, 0, w, h);
-                        cameraRecordingCtx.restore();
-                    } else {
-                        cameraRecordingCtx.drawImage(video, 0, 0, w, h);
-                    }
+                    drawVideoWithDigitalZoom(cameraRecordingCtx, w, h);
                     cameraDrawRequestId = requestAnimationFrame(drawFrame);
                 };
 
@@ -1307,7 +1525,7 @@
             
             // Check for sharing indicators including Edge-specific patterns
             if ((text.includes('sharing') || 
-                 text.includes('MediaCreatonTool') ||
+                 text.includes('MediaCreationTool') ||
                  text.includes('screen') ||
                  text.includes('recording') ||
                  text.includes('is sharing your') ||  // Edge-specific text
@@ -1768,19 +1986,7 @@
                 const context = canvas.getContext('2d');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-
-                if (mirrorFeed) {
-                    // Apply mirroring effect
-                    context.translate(canvas.width, 0);
-                    context.scale(-1, 1);
-                }
-
-                context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                // If we applied mirroring, reset the transform for future operations
-                if (mirrorFeed) {
-                    context.setTransform(1, 0, 0, 1, 0, 0);
-                }
+                drawVideoWithDigitalZoom(context, canvas.width, canvas.height);
 
                 canvas.toBlob((blob) => {
                     if (!blob) return;
@@ -1792,6 +1998,184 @@
                     URL.revokeObjectURL(url);
                 }, 'image/png');
             }
+        }
+
+        function cleanupTimelapseArtifacts() {
+            timelapseCapturing = false;
+            if (timelapseCaptureTimer) {
+                clearInterval(timelapseCaptureTimer);
+                timelapseCaptureTimer = null;
+            }
+            try {
+                timelapseFrames.forEach((bmp) => {
+                    try { bmp.close && bmp.close(); } catch (e) {}
+                });
+            } catch (e) {}
+            timelapseFrames = [];
+        }
+
+        function formatTimelapseDuration(seconds) {
+            if (!Number.isFinite(seconds) || seconds < 0) return '—';
+            if (seconds < 60) {
+                const t = Math.round(seconds * 10) / 10;
+                return Math.abs(t - Math.round(t)) < 0.05 ? `${Math.round(t)}s` : `${t.toFixed(1)}s`;
+            }
+            const sRound = Math.round(seconds);
+            const h = Math.floor(sRound / 3600);
+            const m = Math.floor((sRound % 3600) / 60);
+            const sec = sRound % 60;
+            if (h > 0) return `${h}h ${m}m ${sec}s`;
+            return `${m}m ${sec}s`;
+        }
+
+        function updateTimelapseDurationSummary() {
+            if (!timelapseDurationSummary) return;
+            let intervalSec = parseInt(timelapseIntervalInput.value, 10);
+            let frames = parseInt(timelapseFramesInput.value, 10);
+            let fps = parseInt(timelapsePlaybackFpsInput.value, 10);
+            if (Number.isNaN(intervalSec)) intervalSec = 2;
+            if (Number.isNaN(frames)) frames = 601;
+            if (Number.isNaN(fps)) fps = 30;
+            intervalSec = Math.max(1, intervalSec);
+            frames = Math.max(2, frames);
+            fps = Math.max(5, fps);
+            const recordSeconds = (frames - 1) * intervalSec;
+            const playbackSeconds = frames / fps;
+            timelapseDurationSummary.innerHTML =
+                'Record <strong>' +
+                formatTimelapseDuration(recordSeconds) +
+                '</strong> · Playback <strong>' +
+                formatTimelapseDuration(playbackSeconds) +
+                '</strong>';
+        }
+
+        async function startTimelapse() {
+            if (!currentStream) return;
+
+            const intervalSeconds = Math.max(1, parseInt(timelapseIntervalInput.value || '2', 10));
+            const targetFrames = Math.max(2, parseInt(timelapseFramesInput.value || '601', 10));
+            const playbackFps = Math.max(5, parseInt(timelapsePlaybackFpsInput.value || '30', 10));
+
+            cleanupTimelapseArtifacts();
+            timelapseCapturing = true;
+            toggleTimelapseButton.textContent = 'Stop Timelapse';
+            toggleTimelapseButton.classList.add('recording');
+            toggleTimelapseButton.setAttribute('aria-pressed', 'true');
+            activeRecordingType = 'timelapse';
+            setRecordingLock(toggleTimelapseButton);
+            if (recordingStatus) recordingStatus.textContent = 'Timelapse capture started.';
+
+            // Capture frames from the current camera preview into ImageBitmaps.
+            const captureCanvas = document.createElement('canvas');
+            const ctx = captureCanvas.getContext('2d');
+            const w = video.videoWidth || 1280;
+            const h = video.videoHeight || 720;
+            captureCanvas.width = w;
+            captureCanvas.height = h;
+
+            const captureOnce = async () => {
+                if (!timelapseCapturing) return;
+                try {
+                    ctx.clearRect(0, 0, w, h);
+                    drawVideoWithDigitalZoom(ctx, w, h);
+                    const bmp = await createImageBitmap(captureCanvas);
+                    timelapseFrames.push(bmp);
+                    if (recordingStatus) recordingStatus.textContent = `Timelapse: captured ${timelapseFrames.length}/${targetFrames}`;
+                } catch (e) {
+                    console.error('Timelapse capture frame failed:', e);
+                }
+
+                if (timelapseFrames.length >= targetFrames) {
+                    stopTimelapse(playbackFps);
+                }
+            };
+
+            // Capture immediately, then on interval.
+            await captureOnce();
+            timelapseCaptureTimer = setInterval(captureOnce, intervalSeconds * 1000);
+        }
+
+        async function stopTimelapse(playbackFpsOverride = null) {
+            if (!timelapseCapturing && timelapseFrames.length === 0) {
+                // Still reset UI in case.
+                toggleTimelapseButton.textContent = 'Start Timelapse';
+                toggleTimelapseButton.classList.remove('recording');
+                toggleTimelapseButton.setAttribute('aria-pressed', 'false');
+                clearRecordingLock();
+                return;
+            }
+
+            timelapseCapturing = false;
+            if (timelapseCaptureTimer) {
+                clearInterval(timelapseCaptureTimer);
+                timelapseCaptureTimer = null;
+            }
+
+            const playbackFps = playbackFpsOverride ?? Math.max(5, parseInt(timelapsePlaybackFpsInput.value || '30', 10));
+
+            toggleTimelapseButton.textContent = 'Start Timelapse';
+            toggleTimelapseButton.classList.remove('recording');
+            toggleTimelapseButton.setAttribute('aria-pressed', 'false');
+            clearRecordingLock();
+
+            const framesToRender = timelapseFrames.slice();
+            if (framesToRender.length < 2) {
+                cleanupTimelapseArtifacts();
+                if (recordingStatus) recordingStatus.textContent = 'Timelapse stopped (not enough frames).';
+                return;
+            }
+
+            if (recordingStatus) recordingStatus.textContent = `Timelapse rendering ${framesToRender.length} frames...`;
+
+            // Render frames quickly into a canvas and record that canvas to a single file.
+            const outCanvas = document.createElement('canvas');
+            const outCtx = outCanvas.getContext('2d');
+            outCanvas.width = framesToRender[0].width;
+            outCanvas.height = framesToRender[0].height;
+
+            const outStream = outCanvas.captureStream(playbackFps);
+            const options = { mimeType: 'video/webm;codecs=vp9' };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/webm;codecs=vp8';
+            }
+
+            const chunks = [];
+            const recorder = new MediaRecorder(outStream, options);
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) chunks.push(event.data);
+            };
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = getTimestamp() + 'timelapse.webm';
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+
+                try { outStream.getTracks().forEach(t => t.stop()); } catch (e) {}
+                try {
+                    framesToRender.forEach((bmp) => { try { bmp.close && bmp.close(); } catch (e) {} });
+                } catch (e) {}
+                timelapseFrames = [];
+                if (recordingStatus) recordingStatus.textContent = 'Timelapse ready.';
+            };
+
+            recorder.start();
+
+            let idx = 0;
+            const frameIntervalMs = Math.max(1, Math.floor(1000 / playbackFps));
+            const renderTimer = setInterval(() => {
+                if (idx >= framesToRender.length) {
+                    clearInterval(renderTimer);
+                    recorder.stop();
+                    return;
+                }
+                outCtx.drawImage(framesToRender[idx], 0, 0, outCanvas.width, outCanvas.height);
+                idx += 1;
+            }, frameIntervalMs);
         }
 
         async function startStreamCapture() {
@@ -1937,23 +2321,23 @@
                         const dx = sw - overlayW - pad;
                         const dy = sh - overlayH - pad;
 
-                        // Draw "cover" so the overlay fills nicely.
+                        // Draw "cover" inside the digitally zoomed region (matches main preview).
                         const srcW = camSrc.videoWidth || overlayW;
                         const srcH = camSrc.videoHeight || overlayH;
-                        const srcAspect = srcW / srcH;
+                        const zr = getDigitalZoomSourceRect(srcW, srcH);
+                        const srcAspect = zr.sw / zr.sh;
                         const dstAspect = overlayW / overlayH;
 
-                        let sx = 0, sy = 0, swSrc = srcW, shSrc = srcH;
+                        let sx = zr.sx;
+                        let sy = zr.sy;
+                        let swSrc = zr.sw;
+                        let shSrc = zr.sh;
                         if (srcAspect > dstAspect) {
-                            // Wider than target: crop left/right
-                            shSrc = srcH;
-                            swSrc = shSrc * dstAspect;
-                            sx = (srcW - swSrc) / 2;
+                            swSrc = zr.sh * dstAspect;
+                            sx = zr.sx + (zr.sw - swSrc) / 2;
                         } else {
-                            // Taller than target: crop top/bottom
-                            swSrc = srcW;
-                            shSrc = swSrc / dstAspect;
-                            sy = (srcH - shSrc) / 2;
+                            shSrc = zr.sw / dstAspect;
+                            sy = zr.sy + (zr.sh - shSrc) / 2;
                         }
 
                         streamRecordingCtx.save();
@@ -2331,6 +2715,25 @@
             }
         });
 
+        toggleTimelapseButton.addEventListener('click', () => {
+            if (timelapseCapturing) {
+                stopTimelapse();
+            } else {
+                startTimelapse();
+            }
+        });
+
+        if (timelapseIntervalInput && timelapseFramesInput && timelapsePlaybackFpsInput) {
+            const refreshTimelapseSummary = () => updateTimelapseDurationSummary();
+            timelapseIntervalInput.addEventListener('input', refreshTimelapseSummary);
+            timelapseIntervalInput.addEventListener('change', refreshTimelapseSummary);
+            timelapseFramesInput.addEventListener('input', refreshTimelapseSummary);
+            timelapseFramesInput.addEventListener('change', refreshTimelapseSummary);
+            timelapsePlaybackFpsInput.addEventListener('input', refreshTimelapseSummary);
+            timelapsePlaybackFpsInput.addEventListener('change', refreshTimelapseSummary);
+        }
+        updateTimelapseDurationSummary();
+
         mirrorToggleButton.addEventListener('click', () => {
             mirrorFeed = !mirrorFeed;
             updateMirroring();
@@ -2358,6 +2761,46 @@
                 }
             } catch (e) {}
         });
+
+        if (zoomSlider) {
+            zoomSlider.addEventListener('input', () => {
+                applyDigitalZoomFromSlider();
+            });
+        }
+
+        if (zoomColumn && zoomSlider) {
+            zoomColumn.addEventListener(
+                'wheel',
+                (e) => {
+                    e.preventDefault();
+                    const min = parseFloat(zoomSlider.min);
+                    const max = parseFloat(zoomSlider.max);
+                    const snapStep = parseFloat(zoomSlider.step) || 0.1;
+                    const wheelStep = 0.2;
+                    let v = parseFloat(zoomSlider.value);
+                    if (Number.isNaN(v)) v = 1;
+                    if (!e.deltaY) return;
+                    const dir = e.deltaY > 0 ? -1 : 1;
+                    let clicks = 1;
+                    if (e.deltaMode === 1) {
+                        clicks = Math.max(1, Math.round(Math.abs(e.deltaY)));
+                    } else if (e.deltaMode === 2) {
+                        clicks = Math.max(1, Math.round(Math.abs(e.deltaY)) * 3);
+                    } else {
+                        const a = Math.abs(e.deltaY);
+                        if (a < 40) return;
+                        clicks = Math.max(1, Math.round(a / 100));
+                    }
+                    v += dir * wheelStep * clicks;
+                    v = Math.min(max, Math.max(min, v));
+                    const snapped = Math.round(v / snapStep) * snapStep;
+                    const clamped = Math.min(max, Math.max(min, snapped));
+                    zoomSlider.value = String(clamped);
+                    applyDigitalZoomFromSlider();
+                },
+                { passive: false, capture: true }
+            );
+        }
 
         initializeDevices();
 
