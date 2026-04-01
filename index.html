@@ -33,6 +33,47 @@
             width: 90%;
             max-width: 640px;
         }
+        .camera-constraints-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 12px 16px;
+            margin-bottom: 10px;
+            padding: 10px 8px;
+            background: rgba(0, 0, 0, 0.04);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .camera-constraint-field {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            min-width: 0;
+        }
+        .camera-constraint-field label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .camera-constraint-field select {
+            min-width: 140px;
+            max-width: 100%;
+            padding: 6px 8px;
+            font-size: 13px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer;
+        }
+        .camera-constraint-field select:disabled {
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
         .preview-row {
             display: flex;
             flex-direction: row;
@@ -45,14 +86,58 @@
             flex: 1;
             min-width: 0;
             text-align: center;
-            overflow: hidden;
+            overflow: visible;
             border-radius: 2px;
             background: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
         }
-        .video-digital-zoom {
-            width: 100%;
+        .preview-row.preview-row--awaiting-camera .preview-video-wrap {
+            min-height: min(50vh, 360px);
+        }
+        .preview-row.preview-row--awaiting-camera .video-digital-zoom {
+            visibility: hidden;
+        }
+        .preview-row.preview-row--awaiting-camera .preview-video-wrap::after {
+            content: 'Starting camera…';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: #aaa;
+            pointer-events: none;
+        }
+        /*
+          Intrinsic video sizing (max-width / max-height) avoids cropping when decoded
+          aspect differs slightly from track settings + forced CSS aspect-ratio boxes.
+        */
+        .preview-video-wrap .video-digital-zoom {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+            margin: 0 auto;
+            line-height: 0;
+            vertical-align: middle;
             transform-origin: center center;
             will-change: transform;
+        }
+        .preview-video-wrap .video-digital-zoom video {
+            display: block;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: min(70vh, 640px);
+            margin: 0;
+            border: 1px solid #ccc;
+            border-radius: 2px;
+            box-sizing: border-box;
+            object-fit: contain;
+            transition: transform 0.5s ease-in-out;
         }
         .zoom-column {
             flex: 0 0 52px;
@@ -100,10 +185,6 @@
         }
         video {
             display: block;
-            margin: 0 auto;
-            border: 1px solid #ccc;
-            width: 100%;
-            height: auto;
             transition: transform 0.5s ease-in-out;
         }
 
@@ -697,7 +778,18 @@
 <body>
 
     <div class="container">
-        <div class="preview-row">
+        <div class="camera-constraints-bar" id="cameraConstraintsBar" aria-label="Camera preview settings">
+            <div class="camera-constraint-field">
+                <label for="cameraResolutionSelect">Resolution</label>
+                <select id="cameraResolutionSelect" aria-label="Camera resolution"></select>
+            </div>
+            <div class="camera-constraint-field">
+                <label for="cameraFpsSelect">Frame rate</label>
+                <select id="cameraFpsSelect" aria-label="Camera frame rate"></select>
+            </div>
+        </div>
+
+        <div class="preview-row preview-row--awaiting-camera" id="previewRow">
             <div class="preview-video-wrap">
                 <div class="video-digital-zoom" id="videoDigitalZoom">
                     <video id="video" autoplay muted></video>
@@ -788,8 +880,286 @@
         const recordingStatus = document.getElementById('recordingStatus');
         const zoomSlider = document.getElementById('zoomSlider');
         const zoomColumn = document.getElementById('zoomColumn');
+        const previewRow = document.getElementById('previewRow');
         const videoDigitalZoom = document.getElementById('videoDigitalZoom');
         const zoomValueLabel = document.getElementById('zoomValueLabel');
+        const cameraResolutionSelect = document.getElementById('cameraResolutionSelect');
+        const cameraFpsSelect = document.getElementById('cameraFpsSelect');
+
+        /** Common sizes up through 8K; filtered by getCapabilities() (includes 5K / DCI-style heights). */
+        const STANDARD_CAMERA_RESOLUTIONS = [
+            [7680, 4320],
+            [5120, 3200],
+            [5120, 2880],
+            [5120, 2700],
+            [5120, 2160],
+            [3840, 2160],
+            [3840, 1600],
+            [2560, 1440],
+            [2560, 1080],
+            [1920, 1080],
+            [1920, 1200],
+            [1600, 900],
+            [1280, 720],
+            [1024, 768],
+            [960, 540],
+            [800, 600],
+            [640, 480],
+            [640, 360],
+            [320, 240]
+        ];
+        const STANDARD_CAMERA_FPS = [120, 90, 72, 60, 50, 48, 30, 25, 24, 20, 15, 10, 5];
+
+        function buildResolutionChoices(caps) {
+            if (!caps || caps.width == null || caps.height == null) {
+                return [];
+            }
+            const wMin = caps.width.min != null ? caps.width.min : 1;
+            const wMax = caps.width.max != null ? caps.width.max : 1920;
+            const hMin = caps.height.min != null ? caps.height.min : 1;
+            const hMax = caps.height.max != null ? caps.height.max : 1080;
+            const out = [];
+            for (const [w, h] of STANDARD_CAMERA_RESOLUTIONS) {
+                if (w >= wMin && w <= wMax && h >= hMin && h <= hMax) {
+                    out.push({ w, h });
+                }
+            }
+            const maxW = Math.floor(wMax);
+            const maxH = Math.floor(hMax);
+            if (maxW >= wMin && maxH >= hMin && !out.some((p) => p.w === maxW && p.h === maxH)) {
+                out.unshift({ w: maxW, h: maxH });
+            }
+            out.sort((a, b) => b.w * b.h - a.w * a.h);
+            if (out.length === 0 && maxW > 0 && maxH > 0) {
+                out.push({ w: maxW, h: maxH });
+            }
+            return out;
+        }
+
+        /** WebM/VP9 bitrate scales with resolution (5K+ needs much more than 1080p). */
+        function pickVideoBitrateForResolution(w, h) {
+            const pixels =
+                Math.max(1, Math.floor(w || 0)) * Math.max(1, Math.floor(h || 0));
+            if (pixels <= 920000) return 5_000_000;
+            if (pixels <= 2100000) return 8_000_000;
+            if (pixels <= 3800000) return 12_000_000;
+            if (pixels <= 8500000) return 28_000_000;
+            if (pixels <= 16_500_000) return 42_000_000;
+            return 55_000_000;
+        }
+
+        function formatFpsLabel(f) {
+            if (Number.isInteger(f)) return String(f);
+            const r = Math.round(f * 100) / 100;
+            return String(r);
+        }
+
+        function buildFpsChoices(caps) {
+            if (!caps || caps.frameRate == null) {
+                return [30];
+            }
+            const fMin = caps.frameRate.min != null ? caps.frameRate.min : 1;
+            const fMax = caps.frameRate.max != null ? caps.frameRate.max : 30;
+            const out = STANDARD_CAMERA_FPS.filter((f) => f >= fMin - 0.02 && f <= fMax + 0.02);
+            const nearMax = Math.min(fMax, Math.floor(fMax * 100) / 100);
+            if (nearMax >= fMin && !out.some((f) => Math.abs(f - fMax) < 0.75)) {
+                out.unshift(nearMax);
+            }
+            const seen = new Set();
+            const uniq = [];
+            for (const f of out.sort((a, b) => b - a)) {
+                const k = formatFpsLabel(f);
+                if (!seen.has(k)) {
+                    seen.add(k);
+                    uniq.push(f);
+                }
+            }
+            return uniq.length ? uniq : [Math.min(30, fMax)];
+        }
+
+        function updateCameraConstraintControlsState() {
+            const lock = cameraRecordingActive || timelapseCapturing;
+            if (cameraResolutionSelect) {
+                cameraResolutionSelect.disabled = lock || cameraList.length === 0;
+            }
+            if (cameraFpsSelect) {
+                cameraFpsSelect.disabled = lock || cameraList.length === 0;
+            }
+        }
+
+        function waitForVideoFrameDimensions(videoEl, timeoutMs = 15000) {
+            return new Promise((resolve, reject) => {
+                function ok() {
+                    return videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0;
+                }
+                if (ok()) {
+                    resolve();
+                    return;
+                }
+                const t = setTimeout(() => {
+                    cleanup();
+                    reject(new Error('Video dimensions timeout'));
+                }, timeoutMs);
+                function tryResolve() {
+                    if (ok()) {
+                        cleanup();
+                        resolve();
+                    }
+                }
+                function cleanup() {
+                    clearTimeout(t);
+                    videoEl.removeEventListener('loadedmetadata', tryResolve);
+                    videoEl.removeEventListener('loadeddata', tryResolve);
+                    videoEl.removeEventListener('resize', tryResolve);
+                }
+                videoEl.addEventListener('loadedmetadata', tryResolve);
+                videoEl.addEventListener('loadeddata', tryResolve);
+                videoEl.addEventListener('resize', tryResolve);
+            });
+        }
+
+        function revealPreviewRow() {
+            if (previewRow) previewRow.classList.remove('preview-row--awaiting-camera');
+            if (videoDigitalZoom) videoDigitalZoom.style.visibility = '';
+        }
+
+        /** Populate resolution / FPS UI from an already-open video track (no extra getUserMedia). */
+        function fillCameraControlsFromTrack(videoTrack, opts = {}) {
+            if (!videoTrack || !cameraResolutionSelect || !cameraFpsSelect) return;
+
+            const caps = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+            window.cameraCapabilities = caps;
+
+            const forceHighest = opts.defaultToHighestResAndFps === true;
+            const prevRes = forceHighest ? '' : cameraResolutionSelect.value;
+            const prevFps = forceHighest ? '' : cameraFpsSelect.value;
+
+            cameraResolutionSelect.innerHTML = '';
+            const resChoices = buildResolutionChoices(caps);
+            if (resChoices.length === 0) {
+                const o = document.createElement('option');
+                o.value = '';
+                o.textContent = 'Default';
+                cameraResolutionSelect.appendChild(o);
+            } else {
+                for (const { w, h } of resChoices) {
+                    const o = document.createElement('option');
+                    o.value = `${w}x${h}`;
+                    o.textContent = `${w} × ${h}`;
+                    cameraResolutionSelect.appendChild(o);
+                }
+                const keys = new Set(
+                    Array.from(cameraResolutionSelect.options).map((opt) => opt.value)
+                );
+                if (prevRes && keys.has(prevRes)) {
+                    cameraResolutionSelect.value = prevRes;
+                } else {
+                    /* buildResolutionChoices sorts by pixel count descending — first = highest supported. */
+                    cameraResolutionSelect.selectedIndex = 0;
+                }
+            }
+
+            cameraFpsSelect.innerHTML = '';
+            const fpsChoices = buildFpsChoices(caps);
+            for (const f of fpsChoices) {
+                const o = document.createElement('option');
+                const fv = formatFpsLabel(f);
+                o.value = fv;
+                o.textContent = `${fv} fps`;
+                cameraFpsSelect.appendChild(o);
+            }
+            const fpsVals = new Set(Array.from(cameraFpsSelect.options).map((opt) => opt.value));
+            if (prevFps && fpsVals.has(prevFps)) {
+                cameraFpsSelect.value = prevFps;
+            } else if (cameraFpsSelect.options.length > 0) {
+                /* buildFpsChoices lists highest frame rate first. */
+                cameraFpsSelect.selectedIndex = 0;
+            }
+
+            updateCameraConstraintControlsState();
+        }
+
+        function setCameraControlsFallbackDefaults() {
+            window.cameraCapabilities = null;
+            if (!cameraResolutionSelect || !cameraFpsSelect) return;
+            cameraResolutionSelect.innerHTML = '';
+            const ro = document.createElement('option');
+            ro.value = '';
+            ro.textContent = 'Default';
+            cameraResolutionSelect.appendChild(ro);
+            cameraFpsSelect.innerHTML = '';
+            const fo = document.createElement('option');
+            fo.value = '30';
+            fo.textContent = '30 fps';
+            cameraFpsSelect.appendChild(fo);
+            updateCameraConstraintControlsState();
+        }
+
+        function getVideoConstraintsFromControls(deviceId) {
+            const caps = window.cameraCapabilities;
+            const videoConstraints = {};
+            if (deviceId && String(deviceId).length > 0) {
+                videoConstraints.deviceId = { exact: deviceId };
+            }
+
+            const resVal = cameraResolutionSelect && cameraResolutionSelect.value;
+            if (resVal && resVal.includes('x')) {
+                const parts = resVal.toLowerCase().split('x');
+                const w = parseInt(parts[0], 10);
+                const h = parseInt(parts[1], 10);
+                if (Number.isFinite(w) && Number.isFinite(h)) {
+                    videoConstraints.width = { ideal: w };
+                    videoConstraints.height = { ideal: h };
+                }
+            } else if (caps && caps.width && caps.height) {
+                videoConstraints.width = { ideal: caps.width.max };
+                videoConstraints.height = { ideal: caps.height.max };
+            }
+
+            const fpsVal = cameraFpsSelect && cameraFpsSelect.value;
+            const fps = fpsVal ? parseFloat(fpsVal) : NaN;
+            if (Number.isFinite(fps)) {
+                if (caps && caps.frameRate && caps.frameRate.max != null) {
+                    videoConstraints.frameRate = {
+                        ideal: fps,
+                        max: caps.frameRate.max
+                    };
+                } else {
+                    videoConstraints.frameRate = { ideal: fps };
+                }
+            }
+
+            if (!(resVal && resVal.includes('x')) && caps && caps.aspectRatio) {
+                videoConstraints.aspectRatio = { ideal: caps.aspectRatio.max };
+            }
+
+            return videoConstraints;
+        }
+
+        async function restartCameraPreviewForConstraints() {
+            if (!currentCameraDeviceId) return;
+            if (cameraRecordingActive || timelapseCapturing) return;
+            await startCamera(currentCameraDeviceId);
+        }
+
+        /** Same negotiation as changing resolution: reopen with getVideoConstraintsFromControls (not device-only). */
+        async function refineCameraStreamToMatchControls() {
+            if (!currentCameraDeviceId || cameraRecordingActive || timelapseCapturing) return;
+            if (!currentStream) return;
+            try {
+                await startCamera(currentCameraDeviceId);
+            } catch (e) {
+                console.warn('Refine camera stream to match controls failed:', e);
+                const id = currentCameraDeviceId;
+                if (id) {
+                    try {
+                        await startCamera(id, { preferMinimalVideo: true });
+                    } catch (e2) {
+                        console.warn('Camera minimal reopen failed:', e2);
+                    }
+                }
+            }
+        }
 
         // Lock other recording buttons while one mode is active.
         // This prevents starting multiple recorder types at the same time.
@@ -886,6 +1256,75 @@
         let currentCameraDeviceId = null;
         let currentMicDeviceId = null;
 
+        async function refreshMediaDeviceLists() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                cameraList = devices.filter((d) => d.kind === 'videoinput');
+                microphoneList = devices.filter((d) => d.kind === 'audioinput');
+            } catch (e) {
+                console.warn('refreshMediaDeviceLists:', e);
+            }
+        }
+
+        let cameraAutoReconnectInFlight = false;
+
+        async function handleCameraDisconnected(endedVideoTrack) {
+            if (cameraAutoReconnectInFlight) return;
+            cameraAutoReconnectInFlight = true;
+            try {
+                const lostId =
+                    (endedVideoTrack &&
+                        endedVideoTrack.getSettings &&
+                        endedVideoTrack.getSettings().deviceId) ||
+                    currentCameraDeviceId;
+
+                await refreshMediaDeviceLists();
+                const inputs = cameraList.filter((d) => d.deviceId && String(d.deviceId).length > 0);
+                if (inputs.length === 0) {
+                    console.warn('Camera disconnected; no video inputs available.');
+                    return;
+                }
+
+                const others = inputs.filter((d) => d.deviceId !== lostId);
+                const tryOrder = others.length > 0 ? others : inputs;
+
+                for (const cand of tryOrder) {
+                    currentCameraDeviceId = cand.deviceId;
+                    const idx = cameraList.findIndex((d) => d.deviceId === cand.deviceId);
+                    if (idx >= 0) currentCameraIndex = idx;
+                    await startCamera(cand.deviceId, {
+                        preferMinimalVideo: true,
+                        defaultToHighestResAndFps: true
+                    });
+                    if (currentStream) break;
+                }
+
+                if (!currentStream) {
+                    await startCamera('', {
+                        preferMinimalVideo: true,
+                        defaultToHighestResAndFps: true
+                    });
+                }
+
+                if (currentStream) {
+                    await refineCameraStreamToMatchControls();
+                }
+
+                await refreshMediaDeviceLists();
+                const track = currentStream && currentStream.getVideoTracks()[0];
+                const st = track && track.getSettings ? track.getSettings() : {};
+                if (st.deviceId) {
+                    currentCameraDeviceId = st.deviceId;
+                    const syncIdx = cameraList.findIndex((d) => d.deviceId === st.deviceId);
+                    if (syncIdx >= 0) currentCameraIndex = syncIdx;
+                }
+            } catch (e) {
+                console.warn('handleCameraDisconnected:', e);
+            } finally {
+                cameraAutoReconnectInFlight = false;
+            }
+        }
+
         function updateMirrorToggleUI() {
             // Only mirror the word; keep the button clickable and stable.
             mirrorToggleText.style.display = 'inline-block';
@@ -911,29 +1350,50 @@
 
         async function initializeDevices() {
             try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                cameraList = devices.filter(device => device.kind === 'videoinput');
-                microphoneList = devices.filter(device => device.kind === 'audioinput');
-                
+                await refreshMediaDeviceLists();
+
+                /* Until permission is granted, deviceId is often blank and entries are unreliable. */
+                if (
+                    cameraList.length > 0 &&
+                    cameraList.every((d) => !d.deviceId || String(d.deviceId).length === 0)
+                ) {
+                    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    tmp.getTracks().forEach((t) => t.stop());
+                    await refreshMediaDeviceLists();
+                }
+
                 if (cameraList.length > 0) {
                     const deviceId = cameraList[0].deviceId;
                     currentCameraDeviceId = deviceId;
-                    
-                    // Get camera capabilities
-                    const testStream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: deviceId } });
-                    const videoTrack = testStream.getVideoTracks()[0];
-                    const capabilities = videoTrack.getCapabilities();
-                    console.log("Camera capabilities:", capabilities);
-                    
-                    // Store capabilities for later use
-                    window.cameraCapabilities = capabilities;
-                    
-                    // Clean up test stream
-                    testStream.getTracks().forEach(track => track.stop());
-                    
-                    startCamera(deviceId);
+                    currentCameraIndex = 0;
+                    await startCamera(deviceId, { preferMinimalVideo: true });
+                    await refineCameraStreamToMatchControls();
+                    if (currentStream && video) {
+                        try {
+                            await waitForVideoFrameDimensions(video);
+                        } catch (e) {
+                            console.warn('Preview ready wait:', e);
+                        }
+                        await new Promise((resolve) => {
+                            requestAnimationFrame(() => {
+                                requestAnimationFrame(resolve);
+                            });
+                        });
+                    }
+                    await refreshMediaDeviceLists();
+                    const track = currentStream && currentStream.getVideoTracks()[0];
+                    const st = track && track.getSettings ? track.getSettings() : {};
+                    if (st.deviceId) {
+                        currentCameraDeviceId = st.deviceId;
+                    }
+                    const idx = cameraList.findIndex((d) => d.deviceId === currentCameraDeviceId);
+                    if (idx >= 0) {
+                        currentCameraIndex = idx;
+                    }
                 } else {
                     console.log("No cameras found.");
+                    if (cameraResolutionSelect) cameraResolutionSelect.innerHTML = '';
+                    if (cameraFpsSelect) cameraFpsSelect.innerHTML = '';
                 }
 
                 if (microphoneList.length > 0) {
@@ -941,85 +1401,107 @@
                 } else {
                     console.log("No microphones found.");
                 }
+                updateCameraConstraintControlsState();
             } catch (err) {
                 console.error("Error initializing devices: " + err);
+            } finally {
+                revealPreviewRow();
             }
         }
 
-        async function startCamera(deviceId) {
+        async function startCamera(deviceId, options = {}) {
+            let preferMinimalVideo = options.preferMinimalVideo === true;
+            const defaultToHighestResAndFps = options.defaultToHighestResAndFps === true;
             try {
-                // Get stored camera capabilities
-                const capabilities = window.cameraCapabilities;
-                
-                // Build video constraints based on capabilities
-                const videoConstraints = {
-                    deviceId: deviceId
-                };
+                const audioConstraints = currentMicDeviceId
+                    ? {
+                          deviceId: currentMicDeviceId,
+                          echoCancellation: true,
+                          noiseSuppression: true,
+                          autoGainControl: true,
+                          sampleRate: 48000,
+                          sampleSize: 16
+                      }
+                    : true;
 
-                if (capabilities) {
-                    // Set highest available width and height
-                    if (capabilities.width && capabilities.height) {
-                        videoConstraints.width = { ideal: capabilities.width.max };
-                        videoConstraints.height = { ideal: capabilities.height.max };
-                    }
-
-                    // Set best available frame rate
-                    if (capabilities.frameRate) {
-                        videoConstraints.frameRate = { 
-                            ideal: Math.min(30, capabilities.frameRate.max),
-                            max: capabilities.frameRate.max 
-                        };
-                    }
-
-                    // Use native aspect ratio if available
-                    if (capabilities.aspectRatio) {
-                        videoConstraints.aspectRatio = { ideal: capabilities.aspectRatio.max };
-                    }
+                let videoConstraints;
+                if (preferMinimalVideo) {
+                    videoConstraints =
+                        deviceId && String(deviceId).length > 0
+                            ? { deviceId: { exact: deviceId } }
+                            : true;
                 } else {
-                    // Fallback to standard HD constraints if capabilities not available
-                    videoConstraints.width = { ideal: 1920 };
-                    videoConstraints.height = { ideal: 1080 };
-                    videoConstraints.frameRate = { ideal: 30, max: 60 };
-                    videoConstraints.aspectRatio = { ideal: 16/9 };
+                    videoConstraints = getVideoConstraintsFromControls(deviceId);
+                    if (!videoConstraints || Object.keys(videoConstraints).length === 0) {
+                        videoConstraints = true;
+                    }
                 }
 
                 const constraints = {
                     video: videoConstraints,
-                    audio: currentMicDeviceId ? {
-                        deviceId: currentMicDeviceId,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        sampleRate: 48000,
-                        sampleSize: 16
-                    } : true
+                    audio: audioConstraints
                 };
 
                 if (currentStream) {
-                    currentStream.getTracks().forEach(track => track.stop());
+                    currentStream.getTracks().forEach((track) => track.stop());
+                    currentStream = null;
+                }
+                try {
+                    if (video) video.srcObject = null;
+                } catch (e) {}
+
+                let stream;
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (err) {
+                    if (!preferMinimalVideo && deviceId && String(deviceId).length > 0) {
+                        console.warn('Camera open failed with full constraints, retrying device-only:', err);
+                        stream = await navigator.mediaDevices.getUserMedia({
+                            video: { deviceId: { exact: deviceId } },
+                            audio: audioConstraints
+                        });
+                        preferMinimalVideo = true;
+                    } else {
+                        throw err;
+                    }
                 }
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                // Get actual track settings
+                currentStream = stream;
+
                 const videoTrack = currentStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.addEventListener(
+                        'ended',
+                        () => {
+                            void handleCameraDisconnected(videoTrack);
+                        },
+                        { once: true }
+                    );
+                }
+                if (preferMinimalVideo) {
+                    fillCameraControlsFromTrack(videoTrack, {
+                        defaultToHighestResAndFps
+                    });
+                } else if (videoTrack && videoTrack.getCapabilities) {
+                    window.cameraCapabilities = videoTrack.getCapabilities();
+                }
+
                 const settings = videoTrack.getSettings();
-                console.log("Active camera settings:", settings);
-                
-                // Update device info with resolution
+                console.log('Active camera settings:', settings);
+
                 updateDeviceInfo(settings);
 
                 video.srcObject = currentStream;
                 updateMirroring();
 
-                // Set video element properties for better quality
                 video.setAttribute('playsinline', true);
                 video.setAttribute('controls', false);
-                video.style.objectFit = 'cover';
 
                 updateZoomUI();
+                updateCameraConstraintControlsState();
             } catch (err) {
-                console.error("Error starting camera: " + err);
+                console.error('Error starting camera: ' + err);
+                setCameraControlsFallbackDefaults();
             }
         }
 
@@ -1181,7 +1663,7 @@
 
                 const options = {
                     mimeType: 'video/webm;codecs=vp9,opus',
-                    videoBitsPerSecond: 8000000,
+                    videoBitsPerSecond: pickVideoBitrateForResolution(w, h),
                     audioBitsPerSecond: 128000
                 };
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
@@ -1213,6 +1695,7 @@
 
                 mediaRecorder.start();
                 cameraRecordingActive = true;
+                updateCameraConstraintControlsState();
                 
                 const drawFrame = () => {
                     if (!cameraRecordingActive || !cameraRecordingCtx) return;
@@ -1251,6 +1734,7 @@
             if (recordingStatus) recordingStatus.textContent = 'Camera recording stopped.';
             recordButton.setAttribute('aria-pressed', 'false');
             clearRecordingLock();
+            updateCameraConstraintControlsState();
         }
 
         function cleanupCameraRecordingArtifacts() {
@@ -1295,6 +1779,7 @@
             cameraAudioGainNode = null;
             cameraAudioSourceNode = null;
             cameraAudioDest = null;
+            updateCameraConstraintControlsState();
         }
 
         async function injectNotificationHider() {
@@ -2091,6 +2576,7 @@
 
             cleanupTimelapseArtifacts();
             timelapseCapturing = true;
+            updateCameraConstraintControlsState();
             toggleTimelapseButton.textContent = 'Stop Timelapse';
             toggleTimelapseButton.classList.add('recording');
             toggleTimelapseButton.setAttribute('aria-pressed', 'true');
@@ -2135,6 +2621,7 @@
                 toggleTimelapseButton.classList.remove('recording');
                 toggleTimelapseButton.setAttribute('aria-pressed', 'false');
                 clearRecordingLock();
+                updateCameraConstraintControlsState();
                 return;
             }
 
@@ -2143,6 +2630,7 @@
                 clearInterval(timelapseCaptureTimer);
                 timelapseCaptureTimer = null;
             }
+            updateCameraConstraintControlsState();
 
             const playbackFps = playbackFpsOverride ?? Math.max(5, parseInt(timelapsePlaybackFpsInput.value || '30', 10));
 
@@ -2155,6 +2643,7 @@
             if (framesToRender.length < 2) {
                 cleanupTimelapseArtifacts();
                 if (recordingStatus) recordingStatus.textContent = 'Timelapse stopped (not enough frames).';
+                updateCameraConstraintControlsState();
                 return;
             }
 
@@ -2169,7 +2658,10 @@
             const outStream = outCanvas.captureStream(playbackFps);
             const lapseOptions = {
                 mimeType: 'video/webm;codecs=vp9',
-                videoBitsPerSecond: 8000000
+                videoBitsPerSecond: pickVideoBitrateForResolution(
+                    outCanvas.width,
+                    outCanvas.height
+                )
             };
             if (!MediaRecorder.isTypeSupported(lapseOptions.mimeType)) {
                 lapseOptions.mimeType = 'video/webm;codecs=vp8';
@@ -2676,11 +3168,52 @@
         }
 
         switchCameraButton.addEventListener('click', async () => {
+            await refreshMediaDeviceLists();
+            if (cameraList.length === 0) return;
+            if (cameraList.length === 1) return;
+
             currentCameraIndex = (currentCameraIndex + 1) % cameraList.length;
-            const deviceId = cameraList[currentCameraIndex].deviceId;
+            const chosen = cameraList[currentCameraIndex];
+            let deviceId = chosen && chosen.deviceId;
             currentCameraDeviceId = deviceId;
-            await startCamera(deviceId);
+
+            if (!deviceId || String(deviceId).length === 0) {
+                await refreshMediaDeviceLists();
+                const again = cameraList[currentCameraIndex];
+                deviceId = again && again.deviceId;
+                currentCameraDeviceId = deviceId;
+            }
+            if (!deviceId || String(deviceId).length === 0) {
+                console.warn('Switch camera: missing deviceId after refresh.');
+                return;
+            }
+
+            await startCamera(deviceId, {
+                preferMinimalVideo: true,
+                defaultToHighestResAndFps: true
+            });
+            await refineCameraStreamToMatchControls();
+
+            await refreshMediaDeviceLists();
+            const track = currentStream && currentStream.getVideoTracks()[0];
+            const st = track && track.getSettings ? track.getSettings() : {};
+            if (st.deviceId) {
+                currentCameraDeviceId = st.deviceId;
+                const syncIdx = cameraList.findIndex((d) => d.deviceId === st.deviceId);
+                if (syncIdx >= 0) {
+                    currentCameraIndex = syncIdx;
+                }
+            }
         });
+
+        if (cameraResolutionSelect) {
+            cameraResolutionSelect.addEventListener('change', () => {
+                restartCameraPreviewForConstraints();
+            });
+        }
+        if (cameraFpsSelect) {
+            cameraFpsSelect.addEventListener('change', () => restartCameraPreviewForConstraints());
+        }
 
         switchMicButton.addEventListener('click', async () => {
             currentMicIndex = (currentMicIndex + 1) % microphoneList.length;
@@ -2831,6 +3364,26 @@
                 },
                 { passive: false, capture: true }
             );
+        }
+
+        if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+            navigator.mediaDevices.addEventListener('devicechange', async () => {
+                await refreshMediaDeviceLists();
+                if (!currentStream) return;
+                const vt = currentStream.getVideoTracks()[0];
+                if (vt && vt.readyState === 'ended') {
+                    void handleCameraDisconnected(vt);
+                    return;
+                }
+                const inputs = cameraList.filter((d) => d.deviceId && String(d.deviceId).length > 0);
+                if (
+                    inputs.length > 0 &&
+                    currentCameraDeviceId &&
+                    !cameraList.some((d) => d.deviceId === currentCameraDeviceId)
+                ) {
+                    void handleCameraDisconnected(vt || null);
+                }
+            });
         }
 
         initializeDevices();
