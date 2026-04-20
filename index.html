@@ -2531,6 +2531,39 @@
                 videoConstraints.aspectRatio = { ideal: caps.aspectRatio.max };
             }
 
+            // #region agent log
+            fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                body: JSON.stringify({
+                    sessionId: 'c44703',
+                    hypothesisId: 'H2',
+                    location: 'getVideoConstraintsFromControls',
+                    message: 'constraints + caps snippet',
+                    data: {
+                        resVal: resVal || '',
+                        fpsVal: fpsVal || '',
+                        out: {
+                            deviceId: !!videoConstraints.deviceId,
+                            width: videoConstraints.width,
+                            height: videoConstraints.height,
+                            frameRate: videoConstraints.frameRate,
+                            aspectRatio: videoConstraints.aspectRatio
+                        },
+                        caps: caps
+                            ? {
+                                  wMax: caps.width && caps.width.max,
+                                  hMax: caps.height && caps.height.max,
+                                  arMin: caps.aspectRatio && caps.aspectRatio.min,
+                                  arMax: caps.aspectRatio && caps.aspectRatio.max
+                              }
+                            : null
+                    },
+                    timestamp: Date.now()
+                })
+            }).catch(() => {});
+            // #endregion
+
             return videoConstraints;
         }
 
@@ -2731,9 +2764,63 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 cameraList = devices.filter((d) => d.kind === 'videoinput');
                 microphoneList = devices.filter((d) => d.kind === 'audioinput');
+                // #region agent log
+                fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                    body: JSON.stringify({
+                        sessionId: 'c44703',
+                        hypothesisId: 'H5-H7',
+                        location: 'refreshMediaDeviceLists',
+                        message: 'videoinput enumeration',
+                        data: {
+                            nCam: cameraList.length,
+                            cams: cameraList.map((d, i) => ({
+                                i,
+                                idLen: d.deviceId ? String(d.deviceId).length : 0,
+                                hasId: !!(d.deviceId && String(d.deviceId).length > 0),
+                                label: (d.label || '').slice(0, 80)
+                            }))
+                        },
+                        timestamp: Date.now()
+                    })
+                }).catch(() => {});
+                // #endregion
             } catch (e) {
                 console.warn('refreshMediaDeviceLists:', e);
             }
+        }
+
+        /** Chrome/Android often omits USB / external videoinput until both built-in facing modes are opened once. */
+        let lastAndroidExternalCamProbeAt = 0;
+
+        async function runAndroidExternalCameraEnumerationProbes(reason) {
+            if (!/Android/i.test(navigator.userAgent || '')) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+
+            const now = Date.now();
+            const throttleMs = reason === 'init' ? 0 : 8000;
+            if (throttleMs > 0 && now - lastAndroidExternalCamProbeAt < throttleMs) return;
+            lastAndroidExternalCamProbeAt = now;
+
+            const tryShortCapture = async (videoConstraints) => {
+                try {
+                    const s = await navigator.mediaDevices.getUserMedia({
+                        video: videoConstraints,
+                        audio: false
+                    });
+                    s.getTracks().forEach((t) => t.stop());
+                } catch (e) {
+                    /* Missing facing mode or busy hardware — ignore */
+                }
+            };
+
+            await tryShortCapture({ facingMode: { ideal: 'user' } });
+            await refreshMediaDeviceLists();
+            if (cameraList.length > 2) return;
+
+            await tryShortCapture({ facingMode: { ideal: 'environment' } });
+            await refreshMediaDeviceLists();
         }
 
         let cameraAutoReconnectInFlight = false;
@@ -2851,6 +2938,9 @@
                         });
                     }
                     await refreshMediaDeviceLists();
+                    if (cameraList.length <= 2) {
+                        await runAndroidExternalCameraEnumerationProbes('init');
+                    }
                     const track = currentStream && currentStream.getVideoTracks()[0];
                     const st = track && track.getSettings ? track.getSettings() : {};
                     if (st.deviceId) {
@@ -2860,6 +2950,7 @@
                     if (idx >= 0) {
                         currentCameraIndex = idx;
                     }
+                    updateDeviceInfo(st);
                 } else {
                     console.log("No cameras found.");
                     if (cameraResolutionSelect) cameraResolutionSelect.innerHTML = '';
@@ -2960,6 +3051,49 @@
                 const settings = videoTrack.getSettings();
                 console.log('Active camera settings:', settings);
 
+                // #region agent log
+                fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                    body: JSON.stringify({
+                        sessionId: 'c44703',
+                        hypothesisId: 'H2',
+                        location: 'startCamera:trackSettings',
+                        message: 'track getSettings after open',
+                        data: {
+                            preferMinimalVideo,
+                            w: settings.width,
+                            h: settings.height,
+                            fps: settings.frameRate,
+                            ar: settings.aspectRatio,
+                            deviceIdLen: settings.deviceId ? String(settings.deviceId).length : 0
+                        },
+                        timestamp: Date.now()
+                    })
+                }).catch(() => {});
+                const __dbgOnMeta = () => {
+                    fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                        body: JSON.stringify({
+                            sessionId: 'c44703',
+                            hypothesisId: 'H1-H4',
+                            location: 'startCamera:video loadedmetadata',
+                            message: 'intrinsic vs layout box',
+                            data: {
+                                vw: video.videoWidth,
+                                vh: video.videoHeight,
+                                cw: video.clientWidth,
+                                ch: video.clientHeight,
+                                zt: videoDigitalZoom ? getComputedStyle(videoDigitalZoom).transform : ''
+                            },
+                            timestamp: Date.now()
+                        })
+                    }).catch(() => {});
+                };
+                video.addEventListener('loadedmetadata', __dbgOnMeta, { once: true });
+                // #endregion
+
                 updateDeviceInfo(settings);
 
                 video.srcObject = currentStream;
@@ -2972,6 +3106,24 @@
                 updateCameraConstraintControlsState();
                 applyStopMotionAuxiliaryLocks();
             } catch (err) {
+                // #region agent log
+                fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                    body: JSON.stringify({
+                        sessionId: 'c44703',
+                        hypothesisId: 'H6',
+                        location: 'startCamera:catch',
+                        message: 'getUserMedia or pipeline failed',
+                        data: {
+                            name: err && err.name,
+                            msg: err && String(err.message || '').slice(0, 120),
+                            deviceIdLen: deviceId ? String(deviceId).length : 0
+                        },
+                        timestamp: Date.now()
+                    })
+                }).catch(() => {});
+                // #endregion
                 console.error('Error starting camera: ' + err);
                 setCameraControlsFallbackDefaults();
                 applyStopMotionAuxiliaryLocks();
@@ -4878,8 +5030,46 @@
             }
             if (!deviceId || String(deviceId).length === 0) {
                 console.warn('Switch camera: missing deviceId after refresh.');
+                // #region agent log
+                fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                    body: JSON.stringify({
+                        sessionId: 'c44703',
+                        hypothesisId: 'H6',
+                        location: 'switchCamera:abort no deviceId',
+                        message: 'chosen slot has empty deviceId',
+                        data: {
+                            currentCameraIndex,
+                            nCam: cameraList.length,
+                            chosenLabel: (chosen && chosen.label) || ''
+                        },
+                        timestamp: Date.now()
+                    })
+                }).catch(() => {});
+                // #endregion
                 return;
             }
+
+            // #region agent log
+            fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                body: JSON.stringify({
+                    sessionId: 'c44703',
+                    hypothesisId: 'H5-H8',
+                    location: 'switchCamera:before startCamera',
+                    message: 'switch target',
+                    data: {
+                        currentCameraIndex,
+                        nCam: cameraList.length,
+                        idLen: String(deviceId).length,
+                        label: (chosen && chosen.label) || ''
+                    },
+                    timestamp: Date.now()
+                })
+            }).catch(() => {});
+            // #endregion
 
             await startCamera(deviceId, {
                 preferMinimalVideo: true,
@@ -4895,6 +5085,25 @@
                 const syncIdx = cameraList.findIndex((d) => d.deviceId === st.deviceId);
                 if (syncIdx >= 0) {
                     currentCameraIndex = syncIdx;
+                } else {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7917/ingest/1a1bce02-2868-4391-9b2c-9ddfa0561db8', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c44703' },
+                        body: JSON.stringify({
+                            sessionId: 'c44703',
+                            hypothesisId: 'H8',
+                            location: 'switchCamera:syncIdx miss',
+                            message: 'active track deviceId not in enumerateDevices list',
+                            data: {
+                                trackIdLen: String(st.deviceId).length,
+                                nCam: cameraList.length,
+                                listIdLens: cameraList.map((d) => (d.deviceId ? String(d.deviceId).length : 0))
+                            },
+                            timestamp: Date.now()
+                        })
+                    }).catch(() => {});
+                    // #endregion
                 }
             }
         });
@@ -5078,6 +5287,12 @@
         if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', async () => {
                 await refreshMediaDeviceLists();
+                if (/Android/i.test(navigator.userAgent || '') && cameraList.length <= 2) {
+                    await runAndroidExternalCameraEnumerationProbes('devicechange');
+                }
+                const vt0 = currentStream && currentStream.getVideoTracks()[0];
+                const st0 = vt0 && vt0.getSettings ? vt0.getSettings() : null;
+                updateDeviceInfo(st0);
                 if (!currentStream) return;
                 const vt = currentStream.getVideoTracks()[0];
                 if (vt && vt.readyState === 'ended') {
@@ -5094,6 +5309,22 @@
                 }
             });
         }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState !== 'visible') return;
+            if (!/Android/i.test(navigator.userAgent || '')) return;
+            try {
+                await refreshMediaDeviceLists();
+                if (cameraList.length <= 2) {
+                    await runAndroidExternalCameraEnumerationProbes('visibility');
+                }
+                const vt = currentStream && currentStream.getVideoTracks()[0];
+                const st = vt && vt.getSettings ? vt.getSettings() : null;
+                updateDeviceInfo(st);
+            } catch (e) {
+                console.warn('visibilitychange camera refresh:', e);
+            }
+        });
 
         currentLang = detectInitialLang();
         applyLanguage(currentLang);
