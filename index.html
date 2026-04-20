@@ -1173,7 +1173,7 @@
         }
 
         /* Phone held upright: keep preview + controls within the viewport */
-        @media (max-width: 640px) and (orientation: portrait) {
+        @media (max-width: 768px) and (orientation: portrait) {
             body {
                 align-items: flex-start;
                 min-height: 100dvh;
@@ -1198,10 +1198,10 @@
                 gap: 8px;
             }
             .preview-video-wrap .video-digital-zoom video {
-                max-height: min(40dvh, calc(100svh - 300px), calc(100dvh - 300px), 340px);
+                max-height: min(32dvh, calc(100svh - 52vh), calc(100dvh - 52vh), 280px);
             }
             .preview-row.preview-row--awaiting-camera .preview-video-wrap {
-                min-height: min(22dvh, 130px);
+                min-height: min(18dvh, 110px);
             }
             .zoom-column {
                 min-height: 100px;
@@ -1362,10 +1362,94 @@
             opacity: 0 !important;
         }
 
+        /* Small viewports: wrap control labels, drop fixed 40px height, scale text */
         @media (max-width: 600px) {
-            .button-group > button {
-                padding: 8px 12px;
+            .button-group:not(.timelapse-row) {
+                flex-wrap: wrap;
+                justify-content: center;
+                gap: 6px;
+                margin-bottom: 8px;
+            }
+            .button-group:not(.timelapse-row) > button {
+                flex: 1 1 calc(50% - 6px);
+                min-width: 0;
+                margin: 0;
+                height: auto;
+                min-height: 32px;
+                padding: 6px 4px;
+                font-size: clamp(9px, 2.9vw, 12px);
+                white-space: normal;
+                word-break: break-word;
+                line-height: 1.15;
+            }
+            .button-group.timelapse-row {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .button-group.timelapse-row > #toggleTimelapse {
+                flex: 1 1 100%;
+                min-height: 34px;
+            }
+            .timelapse-settings {
+                flex: 1 1 100%;
+                margin: 0;
+                padding: 5px 6px;
+                gap: 4px 6px;
+            }
+            .timelapse-settings label {
                 font-size: 10px;
+            }
+            .timelapse-settings input {
+                width: 52px;
+                height: 26px;
+                font-size: 12px;
+            }
+            .timelapse-info-wrap {
+                padding: 4px 6px;
+                margin-bottom: 10px;
+            }
+            .timelapse-info-panel {
+                font-size: 10px;
+                gap: 4px;
+            }
+            .timelapse-info-row {
+                gap: 4px;
+            }
+            .stopmotion-row {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .stopmotion-row > #stopMotionFrameButton,
+            .stopmotion-row > #stopMotionSaveButton {
+                flex: 1 1 calc(50% - 6px);
+                min-width: 0;
+                height: auto;
+                min-height: 34px;
+                padding: 6px 4px;
+                font-size: clamp(9px, 2.9vw, 11px);
+                white-space: normal;
+                word-break: break-word;
+                line-height: 1.15;
+            }
+            .stopmotion-fps-wrap {
+                flex: 1 1 100%;
+                margin: 0;
+                padding: 5px 8px;
+            }
+            .stopmotion-fps-wrap label {
+                font-size: 10px;
+            }
+            .stopmotion-counter,
+            .stopmotion-save-duration {
+                font-size: clamp(10px, 3vw, 12px);
+            }
+            .controls {
+                margin-bottom: 10px;
+            }
+            .camera-constraint-field select {
+                min-width: 0;
+                width: 100%;
+                max-width: 100%;
             }
             .pip-video {
                 width: 120px;
@@ -1417,17 +1501,6 @@
             padding: 0 !important;
             border: 0 !important;
             transform: translateY(100%) !important;
-        }
-
-        @media (max-width: 600px) {
-            .button-group > button {
-                padding: 8px 12px;
-                font-size: 10px;
-            }
-            .pip-video {
-                width: 120px;
-                height: auto;
-            }
         }
 
         /* Target Chrome notifications while preserving PIP */
@@ -1517,17 +1590,6 @@
             transform: none !important;
         }
 
-        @media (max-width: 600px) {
-            .button-group > button {
-                padding: 8px 12px;
-                font-size: 10px;
-            }
-            .pip-video {
-                width: 120px;
-                height: auto;
-            }
-        }
-
         /* Hide sharing notifications more aggressively */
         .x-screen-sharing,
         .x-screen-sharing-indicator,
@@ -1557,13 +1619,6 @@
             z-index: -9999 !important;
             pointer-events: none !important;
             transform: translateY(200%) !important;
-        }
-
-        @media (max-width: 600px) {
-            .button-group > button {
-                padding: 8px 12px;
-                font-size: 10px;
-            }
         }
 
         /* Add global CSS to hide notifications */
