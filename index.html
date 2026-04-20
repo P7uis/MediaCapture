@@ -1362,45 +1362,57 @@
             opacity: 0 !important;
         }
 
-        /* Small viewports: wrap control labels, drop fixed 40px height, scale text */
+        /* Small viewports: same row layout as desktop; tighter chrome; scroll row if needed */
         @media (max-width: 600px) {
             .button-group:not(.timelapse-row) {
-                flex-wrap: wrap;
-                justify-content: center;
-                gap: 6px;
-                margin-bottom: 8px;
+                flex-wrap: nowrap;
+                justify-content: space-between;
+                gap: 0;
+                margin-bottom: 12px;
+                overflow-x: auto;
+                overflow-y: visible;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
             }
             .button-group:not(.timelapse-row) > button {
-                flex: 1 1 calc(50% - 6px);
+                flex: 1;
                 min-width: 0;
-                margin: 0;
-                height: auto;
-                min-height: 32px;
-                padding: 6px 4px;
-                font-size: clamp(9px, 2.9vw, 12px);
-                white-space: normal;
-                word-break: break-word;
-                line-height: 1.15;
+                margin: 0 3px;
+                height: 40px;
+                padding: 8px 4px;
+                font-size: clamp(10px, 2.6vw, 14px);
+                white-space: nowrap;
+                line-height: 1.2;
+            }
+            .button-group:not(.timelapse-row) > button:first-child {
+                margin-left: 0;
+            }
+            .button-group:not(.timelapse-row) > button:last-child {
+                margin-right: 0;
             }
             .button-group.timelapse-row {
-                flex-wrap: wrap;
-                gap: 6px;
+                flex-wrap: nowrap;
+                gap: 0;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
             }
             .button-group.timelapse-row > #toggleTimelapse {
-                flex: 1 1 100%;
-                min-height: 34px;
+                flex: 1 1 0;
+                min-width: 0;
             }
             .timelapse-settings {
-                flex: 1 1 100%;
-                margin: 0;
+                flex: 3 1 0;
+                margin: 0 3px;
                 padding: 5px 6px;
                 gap: 4px 6px;
+                min-width: 0;
             }
             .timelapse-settings label {
-                font-size: 10px;
+                font-size: 11px;
             }
             .timelapse-settings input {
-                width: 52px;
+                width: 56px;
                 height: 26px;
                 font-size: 12px;
             }
@@ -1416,32 +1428,34 @@
                 gap: 4px;
             }
             .stopmotion-row {
-                flex-wrap: wrap;
+                flex-wrap: nowrap;
+                align-items: stretch;
                 gap: 6px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: thin;
             }
             .stopmotion-row > #stopMotionFrameButton,
             .stopmotion-row > #stopMotionSaveButton {
-                flex: 1 1 calc(50% - 6px);
+                flex: 1 1 0;
                 min-width: 0;
-                height: auto;
-                min-height: 34px;
-                padding: 6px 4px;
-                font-size: clamp(9px, 2.9vw, 11px);
-                white-space: normal;
-                word-break: break-word;
-                line-height: 1.15;
+                height: 40px;
+                padding: 8px 4px;
+                font-size: clamp(10px, 2.5vw, 13px);
+                white-space: nowrap;
+                line-height: 1.2;
             }
             .stopmotion-fps-wrap {
-                flex: 1 1 100%;
-                margin: 0;
+                flex: 0 0 auto;
+                margin: 0 3px;
                 padding: 5px 8px;
             }
             .stopmotion-fps-wrap label {
-                font-size: 10px;
+                font-size: 11px;
             }
             .stopmotion-counter,
             .stopmotion-save-duration {
-                font-size: clamp(10px, 3vw, 12px);
+                font-size: clamp(11px, 2.8vw, 14px);
             }
             .controls {
                 margin-bottom: 10px;
