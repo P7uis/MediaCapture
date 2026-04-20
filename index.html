@@ -13,7 +13,7 @@
 </script>
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Media-opname</title>
     <link rel="icon" type="image/x-icon" href="/images/glados.ico">
     <style>
@@ -80,6 +80,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            min-height: 100dvh;
             background-color: var(--mc-bg);
             color: var(--mc-fg);
             transition: background-color 0.2s ease, color 0.2s ease;
@@ -600,12 +601,24 @@
             background-color: #dc3545;
         }
         #toggleTimelapse {
-            background-color: #343a40;
+            background-color: #6c757d;
             flex: 1 1 0;
             min-width: 0;
         }
+        #toggleTimelapse:hover:not(:disabled) {
+            background-color: #5c636a;
+        }
+        #toggleTimelapse:active:not(:disabled) {
+            background-color: #545b62;
+        }
         #toggleTimelapse.recording {
             background-color: #dc3545;
+        }
+        #toggleTimelapse.recording:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+        #toggleTimelapse.recording:active:not(:disabled) {
+            background-color: #bd2130;
         }
         #mirrorToggle,
         #mirrorToggle.mirrored {
@@ -739,13 +752,13 @@
         }
 
         html.mc-theme-dark #toggleTimelapse {
-            background-color: #1a1d21;
+            background-color: #4a5056;
         }
         html.mc-theme-dark #toggleTimelapse:hover {
-            background-color: #131619;
+            background-color: #3d4349;
         }
         html.mc-theme-dark #toggleTimelapse:active {
-            background-color: #0e1012;
+            background-color: #353a3f;
         }
         html.mc-theme-dark #toggleTimelapse.recording {
             background-color: #8b222c;
@@ -861,7 +874,11 @@
             align-items: center;
             overflow-x: hidden;
             overflow-y: visible;
-            transition: background-color 0.2s ease, border-color 0.2s ease;
+            transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+        }
+        .timelapse-info-wrap.timelapse-info-wrap--stopmotion-dim {
+            opacity: 0.42;
+            pointer-events: none;
         }
         .timelapse-info-panel {
             display: flex;
@@ -923,9 +940,170 @@
             box-sizing: border-box;
         }
 
-        @media (min-width: 960px) {
+        .stopmotion-row {
+            align-items: stretch;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .stopmotion-frame-btn-inner {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            line-height: 1.2;
+        }
+        .stopmotion-save-btn-inner {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            line-height: 1.2;
+        }
+        .stopmotion-counter {
+            font-size: 14px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.06em;
+            opacity: 0.95;
+        }
+        .stopmotion-fps-wrap {
+            flex: 0 0 auto;
+            margin: 0 5px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 10px;
+            border-radius: 5px;
+            background: var(--mc-tl-bg);
+            border: 1px solid var(--mc-tl-border);
+            box-sizing: border-box;
+        }
+        .stopmotion-fps-wrap label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--mc-tl-label);
+            white-space: nowrap;
+        }
+        .stopmotion-fps-wrap input {
+            width: 64px;
+            height: 28px;
+            padding: 0 6px;
+            border-radius: 4px;
+            border: 1px solid var(--mc-input-border);
+            background: var(--mc-input-bg);
+            color: var(--mc-input-text);
+            box-sizing: border-box;
+        }
+        .stopmotion-save-duration {
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+        }
+        #stopMotionFrameButton {
+            background-color: rgb(219 52 141);
+            flex: 1 1 140px;
+            min-width: 0;
+            color: #fff;
+        }
+        #stopMotionFrameButton:hover:not(:disabled) {
+            background-color: rgb(200 42 126);
+        }
+        #stopMotionFrameButton:active:not(:disabled) {
+            background-color: rgb(175 36 110);
+        }
+        /* Keep brand colour when disabled (no camera yet); avoid global button:disabled grayscale */
+        #stopMotionFrameButton:disabled {
+            opacity: 0.78;
+            filter: none !important;
+            cursor: not-allowed;
+        }
+        #stopMotionFrameButton:disabled:hover {
+            background-color: rgb(219 52 141) !important;
+            opacity: 0.78;
+        }
+        #stopMotionSaveButton {
+            background-color: rgb(112 197 249);
+            flex: 1 1 140px;
+            min-width: 0;
+            color: #0c2d46;
+        }
+        #stopMotionSaveButton .stopmotion-save-duration {
+            color: rgba(12 45 70 / 0.88);
+        }
+        #stopMotionSaveButton:hover:not(:disabled) {
+            background-color: rgb(88 178 235);
+        }
+        #stopMotionSaveButton:active:not(:disabled) {
+            background-color: rgb(72 158 215);
+        }
+        /* Greyed while 0 frames (or while encoding): not the cyan export colour */
+        #stopMotionSaveButton:disabled {
+            opacity: 1 !important;
+            filter: none !important;
+            background-color: rgb(173 184 194) !important;
+            color: rgb(71 85 105) !important;
+            cursor: not-allowed;
+        }
+        #stopMotionSaveButton:disabled .stopmotion-save-duration {
+            color: rgb(100 116 139) !important;
+        }
+        #stopMotionSaveButton:disabled:hover {
+            background-color: rgb(173 184 194) !important;
+        }
+        html.mc-theme-dark #stopMotionFrameButton {
+            background-color: rgb(168 38 100);
+            color: #fff;
+        }
+        html.mc-theme-dark #stopMotionFrameButton:hover:not(:disabled) {
+            background-color: rgb(185 44 112);
+        }
+        html.mc-theme-dark #stopMotionFrameButton:active:not(:disabled) {
+            background-color: rgb(145 32 88);
+        }
+        html.mc-theme-dark #stopMotionSaveButton {
+            background-color: rgb(62 140 188);
+            color: #f0f9ff;
+        }
+        html.mc-theme-dark #stopMotionSaveButton .stopmotion-save-duration {
+            color: rgba(240 249 255 / 0.92);
+        }
+        html.mc-theme-dark #stopMotionSaveButton:hover:not(:disabled) {
+            background-color: rgb(72 150 198);
+        }
+        html.mc-theme-dark #stopMotionSaveButton:active:not(:disabled) {
+            background-color: rgb(52 118 162);
+        }
+        html.mc-theme-dark #stopMotionFrameButton:disabled {
+            opacity: 0.75;
+            filter: none !important;
+        }
+        html.mc-theme-dark #stopMotionFrameButton:disabled:hover {
+            background-color: rgb(168 38 100) !important;
+            opacity: 0.75;
+        }
+        html.mc-theme-dark #stopMotionSaveButton:disabled {
+            background-color: rgb(71 85 105) !important;
+            color: rgb(203 213 225) !important;
+        }
+        html.mc-theme-dark #stopMotionSaveButton:disabled .stopmotion-save-duration {
+            color: rgb(148 163 184) !important;
+        }
+        html.mc-theme-dark #stopMotionSaveButton:disabled:hover {
+            background-color: rgb(71 85 105) !important;
+        }
+
+        /* Wide desktop OR phone/tablet turned horizontal (narrow width) */
+        @media (min-width: 960px), (orientation: landscape) and (max-width: 959px) {
             .container {
                 max-width: min(92vw, 1200px);
+                width: min(96%, calc(100% - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)));
             }
             .main-workspace {
                 flex-direction: row;
@@ -935,9 +1113,12 @@
             .media-column {
                 flex: 1 1 0;
             }
+            .preview-video-wrap .video-digital-zoom video {
+                max-height: min(calc(100dvh - 96px), calc(100svh - 96px), 72vh, 640px);
+            }
             /* ~same usable width as the original .container (90% of max 640px) so button rows match */
             .controls-column {
-                flex: 0 0 min(600px, 60vw);
+                flex: 0 0 clamp(240px, min(600px, 58vw), 600px);
                 max-height: calc(100vh - 88px);
                 max-height: calc(100dvh - 88px);
                 overflow-y: auto;
@@ -979,6 +1160,84 @@
             .controls-column .timelapse-info-row {
                 flex: 1 1 0;
                 min-width: 0;
+            }
+            .controls-column .stopmotion-row {
+                flex-wrap: nowrap;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .controls-column .stopmotion-fps-wrap {
+                margin: 0;
+                flex: 0 0 auto;
+            }
+        }
+
+        /* Phone held upright: keep preview + controls within the viewport */
+        @media (max-width: 640px) and (orientation: portrait) {
+            body {
+                align-items: flex-start;
+                min-height: 100dvh;
+                min-height: 100svh;
+                padding-left: env(safe-area-inset-left, 0px);
+                padding-right: env(safe-area-inset-right, 0px);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+            .container {
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+            }
+            .camera-constraints-bar {
+                margin-bottom: 8px;
+                padding: 8px 6px;
+                gap: 8px 10px;
+            }
+            .main-workspace {
+                gap: 8px;
+            }
+            .preview-video-wrap .video-digital-zoom video {
+                max-height: min(40dvh, calc(100svh - 300px), calc(100dvh - 300px), 340px);
+            }
+            .preview-row.preview-row--awaiting-camera .preview-video-wrap {
+                min-height: min(22dvh, 130px);
+            }
+            .zoom-column {
+                min-height: 100px;
+            }
+            .zoom-slider-slot {
+                min-height: 72px;
+            }
+            .zoom-slider-slot input[type="range"] {
+                width: min(180px, 28dvh);
+            }
+            .device-info {
+                margin: 6px 0;
+                font-size: 11px;
+            }
+            .button-group {
+                margin-bottom: 10px;
+            }
+            .controls {
+                margin-bottom: 12px;
+            }
+            .timelapse-info-wrap {
+                margin-bottom: 12px;
+            }
+            .chrome-stack {
+                top: max(6px, env(safe-area-inset-top));
+                right: max(6px, env(safe-area-inset-right));
+            }
+        }
+
+        /* Tight landscape (e.g. phone): slightly narrower controls column */
+        @media (orientation: landscape) and (max-width: 700px) {
+            .main-workspace {
+                gap: 10px;
+            }
+            .controls-column {
+                flex: 0 0 clamp(220px, 48vw, 360px) !important;
             }
         }
 
@@ -1429,7 +1688,7 @@
                     </label>
                 </div>
             </div>
-            <div class="timelapse-info-wrap" data-i18n-aria="ariaTimelapseProgress">
+            <div class="timelapse-info-wrap" id="timelapseInfoWrap" data-i18n-aria="ariaTimelapseProgress">
                 <div class="timelapse-info-panel" id="timelapseInfoPanel" aria-live="polite">
                     <div class="timelapse-info-row">
                         <span class="timelapse-info-label" data-i18n="labelFrames">Frames</span>
@@ -1444,6 +1703,26 @@
                         <strong id="timelapseInfoPlayback" class="timelapse-info-value">00:00:00 / 00:00:00</strong>
                     </div>
                 </div>
+            </div>
+            <div class="button-group stopmotion-row" data-i18n-aria="ariaStopMotionRow">
+                <button type="button" id="stopMotionFrameButton" data-i18n-aria="ariaStopMotionFrame">
+                    <span class="stopmotion-frame-btn-inner">
+                        <span data-i18n="btnStopMotionFrame">Stop motion frame</span>
+                        <span id="stopMotionFrameCount" class="stopmotion-counter" aria-live="polite">0000</span>
+                    </span>
+                </button>
+                <div class="stopmotion-fps-wrap" data-i18n-aria="ariaStopMotionFps">
+                    <label for="stopMotionExportFps">
+                        <span data-i18n="labelStopMotionExportFps">Export fps</span>
+                        <input id="stopMotionExportFps" type="number" min="1" max="120" step="1" value="12">
+                    </label>
+                </div>
+                <button type="button" id="stopMotionSaveButton" data-i18n-aria="ariaStopMotionSave" disabled>
+                    <span class="stopmotion-save-btn-inner">
+                        <span data-i18n="btnStopMotionSave">Save stop motion</span>
+                        <span id="stopMotionSaveDuration" class="stopmotion-save-duration">00:00:00</span>
+                    </span>
+                </button>
             </div>
                 </div>
             </div>
@@ -1477,6 +1756,12 @@
         const timelapseInfoFrames = document.getElementById('timelapseInfoFrames');
         const timelapseInfoRecord = document.getElementById('timelapseInfoRecord');
         const timelapseInfoPlayback = document.getElementById('timelapseInfoPlayback');
+        const timelapseInfoWrap = document.getElementById('timelapseInfoWrap');
+        const stopMotionFrameButton = document.getElementById('stopMotionFrameButton');
+        const stopMotionFrameCount = document.getElementById('stopMotionFrameCount');
+        const stopMotionExportFpsInput = document.getElementById('stopMotionExportFps');
+        const stopMotionSaveButton = document.getElementById('stopMotionSaveButton');
+        const stopMotionSaveDuration = document.getElementById('stopMotionSaveDuration');
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
@@ -1550,7 +1835,14 @@
                 deviceLineResolution: 'Resolutie: {w}×{h}',
                 deviceLineFps: 'Beeldsnelheid: {rate} fps',
                 micWithLabel: 'Geselecteerde microfoon: {label}',
-                errNoCameraStream: 'Geen actieve camerastream.'
+                errNoCameraStream: 'Geen actieve camerastream.',
+                btnStopMotionFrame: 'Stop motion frame',
+                btnStopMotionSave: 'Stop motion opslaan',
+                labelStopMotionExportFps: 'Export fps',
+                ariaStopMotionRow: 'Stop motion: frame vastleggen en video exporteren',
+                ariaStopMotionFrame: 'Leg één stop motion frame vast',
+                ariaStopMotionFps: 'Afspeelsnelheid voor geëxporteerde video',
+                ariaStopMotionSave: 'Exporteer stop motion als WebM-video'
             },
             en: {
                 pageTitle: 'Media capture',
@@ -1609,7 +1901,14 @@
                 deviceLineResolution: 'Resolution: {w}×{h}',
                 deviceLineFps: 'Frame rate: {rate} fps',
                 micWithLabel: 'Selected microphone: {label}',
-                errNoCameraStream: 'No active camera stream.'
+                errNoCameraStream: 'No active camera stream.',
+                btnStopMotionFrame: 'Stop motion frame',
+                btnStopMotionSave: 'Save stop motion',
+                labelStopMotionExportFps: 'Export fps',
+                ariaStopMotionRow: 'Stop motion: capture frames and export video',
+                ariaStopMotionFrame: 'Capture one stop motion frame',
+                ariaStopMotionFps: 'Playback speed for exported video',
+                ariaStopMotionSave: 'Export stop motion as WebM video'
             },
             de: {
                 pageTitle: 'Medienaufnahme',
@@ -1668,7 +1967,14 @@
                 deviceLineResolution: 'Auflösung: {w}×{h}',
                 deviceLineFps: 'Bildrate: {rate} fps',
                 micWithLabel: 'Ausgewähltes Mikrofon: {label}',
-                errNoCameraStream: 'Kein aktiver Kamerastream.'
+                errNoCameraStream: 'Kein aktiver Kamerastream.',
+                btnStopMotionFrame: 'Stop-Motion-Einzelbild',
+                btnStopMotionSave: 'Stop-Motion speichern',
+                labelStopMotionExportFps: 'Export fps',
+                ariaStopMotionRow: 'Stop Motion: Bilder aufnehmen und Video exportieren',
+                ariaStopMotionFrame: 'Ein Stop-Motion-Einzelbild aufnehmen',
+                ariaStopMotionFps: 'Wiedergabegeschwindigkeit für exportiertes Video',
+                ariaStopMotionSave: 'Stop Motion als WebM-Video exportieren'
             }
         };
 
@@ -1758,6 +2064,7 @@
             });
 
             syncRecordingButtonLabels();
+            if (typeof updateStopMotionUi === 'function') updateStopMotionUi();
             if (typeof updateMuteToggleUI === 'function') updateMuteToggleUI();
             if (typeof updateMirrorToggleUI === 'function') updateMirrorToggleUI();
             try {
@@ -1935,7 +2242,11 @@
         }
 
         function updateCameraConstraintControlsState() {
-            const lock = cameraRecordingActive || timelapseCapturing;
+            const lock =
+                cameraRecordingActive ||
+                timelapseCapturing ||
+                stopMotionFrames.length > 0 ||
+                stopMotionEncoding;
             if (cameraResolutionSelect) {
                 cameraResolutionSelect.disabled = lock || cameraList.length === 0;
             }
@@ -2096,12 +2407,14 @@
         async function restartCameraPreviewForConstraints() {
             if (!currentCameraDeviceId) return;
             if (cameraRecordingActive || timelapseCapturing) return;
+            if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
             await startCamera(currentCameraDeviceId);
         }
 
         /** Same negotiation as changing resolution: reopen with getVideoConstraintsFromControls (not device-only). */
         async function refineCameraStreamToMatchControls() {
             if (!currentCameraDeviceId || cameraRecordingActive || timelapseCapturing) return;
+            if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
             if (!currentStream) return;
             try {
                 await startCamera(currentCameraDeviceId);
@@ -2158,6 +2471,9 @@
             playbackPlanSec: 20
         };
 
+        let stopMotionFrames = [];
+        let stopMotionEncoding = false;
+
         // Camera-recording pipeline (canvas for mirroring + WebAudio gain for mute).
         let cameraRecordingCanvas = null;
         let cameraRecordingCtx = null;
@@ -2213,15 +2529,62 @@
             return null;
         }
 
+        function stopMotionLockActive() {
+            return stopMotionFrames.length > 0 || stopMotionEncoding;
+        }
+
+        function getStopMotionExportFps() {
+            let fps = parseInt(stopMotionExportFpsInput && stopMotionExportFpsInput.value, 10);
+            if (Number.isNaN(fps)) fps = 12;
+            return Math.max(1, Math.min(120, fps));
+        }
+
+        function applyStopMotionAuxiliaryLocks() {
+            const smLock = stopMotionLockActive();
+            const enc = stopMotionEncoding;
+            /* Keep mirror usable during stop-motion lock; lock for whole stream-capture session (not only while MediaRecorder.state === 'recording'). */
+            const streamMirrorLock = screenStream != null;
+
+            if (switchCameraButton) switchCameraButton.disabled = smLock;
+            if (switchMicButton) switchMicButton.disabled = smLock;
+            if (takePhotoButton) takePhotoButton.disabled = smLock;
+            if (mirrorToggleButton) {
+                mirrorToggleButton.disabled = streamMirrorLock;
+            }
+            if (muteToggleButton) muteToggleButton.disabled = smLock;
+
+            if (timelapseIntervalInput) timelapseIntervalInput.disabled = smLock;
+            if (timelapseFramesInput) timelapseFramesInput.disabled = smLock;
+            if (timelapsePlaybackFpsInput) timelapsePlaybackFpsInput.disabled = smLock;
+
+            if (timelapseInfoWrap) {
+                timelapseInfoWrap.classList.toggle('timelapse-info-wrap--stopmotion-dim', smLock);
+            }
+
+            if (stopMotionFrameButton) {
+                stopMotionFrameButton.disabled = enc || !currentStream;
+            }
+            if (stopMotionSaveButton) {
+                stopMotionSaveButton.disabled = enc || stopMotionFrames.length === 0;
+            }
+            if (stopMotionExportFpsInput) {
+                stopMotionExportFpsInput.disabled = enc;
+            }
+
+            updateCameraConstraintControlsState();
+        }
+
         function syncRecordingModeButtons() {
             const primaryBtn = getPrimaryRecordingActiveButton();
+            const smLock = stopMotionLockActive();
             recordingTypeButtons.forEach((btn) => {
                 if (btn === toggleTimelapseButton) {
-                    btn.disabled = primaryBtn != null && !timelapseCapturing;
+                    btn.disabled = smLock || (primaryBtn != null && !timelapseCapturing);
                 } else {
-                    btn.disabled = primaryBtn != null && btn !== primaryBtn;
+                    btn.disabled = smLock || (primaryBtn != null && btn !== primaryBtn);
                 }
             });
+            applyStopMotionAuxiliaryLocks();
         }
 
         let cameraList = [];
@@ -2379,6 +2742,7 @@
                     console.log("No microphones found.");
                 }
                 updateCameraConstraintControlsState();
+                applyStopMotionAuxiliaryLocks();
             } catch (err) {
                 console.error("Error initializing devices: " + err);
             } finally {
@@ -2476,9 +2840,11 @@
 
                 updateZoomUI();
                 updateCameraConstraintControlsState();
+                applyStopMotionAuxiliaryLocks();
             } catch (err) {
                 console.error('Error starting camera: ' + err);
                 setCameraControlsFallbackDefaults();
+                applyStopMotionAuxiliaryLocks();
             }
         }
 
@@ -2598,6 +2964,9 @@
             try {
                 if (!currentStream) {
                     throw new Error(t('errNoCameraStream'));
+                }
+                if (stopMotionFrames.length > 0 || stopMotionEncoding) {
+                    return;
                 }
 
                 // If we somehow have stale artifacts from an earlier attempt, remove them.
@@ -3128,6 +3497,7 @@
         async function startScreenRecording() {
             try {
                 if (screenCaptureStarting) return;
+                if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
                 screenCaptureStarting = true;
                 toggleScreenRecordingButton.disabled = true;
 
@@ -3416,6 +3786,7 @@
         }
 
         function startAudioRecording() {
+            if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
             const audioConstraints = currentMicDeviceId
                 ? { deviceId: currentMicDeviceId }
                 : true;
@@ -3519,6 +3890,129 @@
             }
         }
 
+        function updateStopMotionUi() {
+            const n = stopMotionFrames.length;
+            if (stopMotionFrameCount) {
+                stopMotionFrameCount.textContent = String(n).padStart(4, '0');
+            }
+            const fps = getStopMotionExportFps();
+            if (stopMotionSaveDuration) {
+                const sec = n === 0 ? 0 : n / fps;
+                stopMotionSaveDuration.textContent = formatTimelapseHmsTriple(sec);
+            }
+            syncRecordingModeButtons();
+        }
+
+        async function captureStopMotionFrame() {
+            if (!currentStream || stopMotionEncoding) return;
+            try {
+                const captureCanvas = document.createElement('canvas');
+                const ctx = captureCanvas.getContext('2d');
+                const w = video.videoWidth || 1280;
+                const h = video.videoHeight || 720;
+                captureCanvas.width = w;
+                captureCanvas.height = h;
+                ctx.clearRect(0, 0, w, h);
+                drawVideoWithDigitalZoom(ctx, w, h);
+                const bmp = await createImageBitmap(captureCanvas);
+                stopMotionFrames.push(bmp);
+                updateStopMotionUi();
+            } catch (e) {
+                console.error('Stop motion frame capture failed:', e);
+            }
+        }
+
+        function saveStopMotionVideo() {
+            if (stopMotionEncoding || stopMotionFrames.length === 0) return;
+
+            const framesToRender = stopMotionFrames.slice();
+            const playbackFps = getStopMotionExportFps();
+
+            stopMotionEncoding = true;
+            updateStopMotionUi();
+
+            const outCanvas = document.createElement('canvas');
+            const outCtx = outCanvas.getContext('2d');
+            outCanvas.width = framesToRender[0].width;
+            outCanvas.height = framesToRender[0].height;
+
+            const outStream = outCanvas.captureStream(playbackFps);
+            const lapseOptions = {
+                mimeType: 'video/webm;codecs=vp9',
+                videoBitsPerSecond: pickVideoBitrateForResolution(outCanvas.width, outCanvas.height)
+            };
+            if (!MediaRecorder.isTypeSupported(lapseOptions.mimeType)) {
+                lapseOptions.mimeType = 'video/webm;codecs=vp8';
+            }
+
+            const chunks = [];
+            let recorder;
+            try {
+                recorder = new MediaRecorder(outStream, lapseOptions);
+            } catch (e) {
+                console.error('Stop motion export failed:', e);
+                try {
+                    outStream.getTracks().forEach((t) => t.stop());
+                } catch (e2) {}
+                stopMotionEncoding = false;
+                updateStopMotionUi();
+                return;
+            }
+
+            recorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) chunks.push(event.data);
+            };
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = getTimestamp() + 'stopmotion.webm';
+                document.body.appendChild(a);
+                a.click();
+                URL.revokeObjectURL(url);
+
+                try {
+                    outStream.getTracks().forEach((t) => t.stop());
+                } catch (e) {}
+                try {
+                    framesToRender.forEach((bmp) => {
+                        try {
+                            bmp.close && bmp.close();
+                        } catch (e) {}
+                    });
+                } catch (e) {}
+                stopMotionFrames = [];
+                stopMotionEncoding = false;
+                updateStopMotionUi();
+            };
+
+            try {
+                recorder.start();
+            } catch (e) {
+                console.error('Stop motion recorder start failed:', e);
+                try {
+                    outStream.getTracks().forEach((t) => t.stop());
+                } catch (e2) {}
+                stopMotionEncoding = false;
+                updateStopMotionUi();
+                return;
+            }
+
+            let idx = 0;
+            const frameIntervalMs = Math.max(1, Math.floor(1000 / playbackFps));
+            const renderTimer = setInterval(() => {
+                if (idx >= framesToRender.length) {
+                    clearInterval(renderTimer);
+                    recorder.stop();
+                    return;
+                }
+                outCtx.drawImage(framesToRender[idx], 0, 0, outCanvas.width, outCanvas.height);
+                idx += 1;
+            }, frameIntervalMs);
+        }
+
         function cleanupTimelapseArtifacts() {
             timelapseCapturing = false;
             if (timelapseCaptureTimer) {
@@ -3620,6 +4114,7 @@
         async function startTimelapse() {
             if (!currentStream) return;
             if (getPrimaryRecordingActiveButton() != null) return;
+            if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
 
             const intervalSeconds = Math.max(1, parseInt(timelapseIntervalInput.value || '2', 10));
             const targetFrames = Math.max(2, parseInt(timelapseFramesInput.value || '601', 10));
@@ -3779,6 +4274,7 @@
 
         async function startStreamCapture() {
             try {
+                if (stopMotionFrames.length > 0 || stopMotionEncoding) return;
                 // During stream capture, keep the corner camera preview non-mirrored
                 // and prevent changing the mirror state mid-session.
                 if (mirrorToggleButton) mirrorToggleButton.disabled = true;
@@ -4064,7 +4560,7 @@
                 }, { once: true });
             } catch (err) {
                 console.error("Error starting stream capture: " + err);
-                if (mirrorToggleButton) mirrorToggleButton.disabled = false;
+                applyStopMotionAuxiliaryLocks();
                 if (window.streamNotificationObserver) {
                     window.streamNotificationObserver.disconnect();
                 }
@@ -4139,8 +4635,7 @@
             streamCaptureCameraVideoEl = null;
             streamCaptureCameraDrawVideoEl = null;
 
-            // Re-enable mirror control after stream capture ends.
-            if (mirrorToggleButton) mirrorToggleButton.disabled = false;
+            applyStopMotionAuxiliaryLocks();
         }
 
         function cleanupStreamCaptureArtifacts() {
@@ -4367,6 +4862,20 @@
             timelapsePlaybackFpsInput.addEventListener('change', refreshTimelapseInfo);
         }
         updateTimelapseInfoIdle();
+
+        if (stopMotionFrameButton) {
+            stopMotionFrameButton.addEventListener('click', () => {
+                void captureStopMotionFrame();
+            });
+        }
+        if (stopMotionSaveButton) {
+            stopMotionSaveButton.addEventListener('click', saveStopMotionVideo);
+        }
+        if (stopMotionExportFpsInput) {
+            stopMotionExportFpsInput.addEventListener('input', updateStopMotionUi);
+            stopMotionExportFpsInput.addEventListener('change', updateStopMotionUi);
+        }
+        updateStopMotionUi();
 
         mirrorToggleButton.addEventListener('click', () => {
             mirrorFeed = !mirrorFeed;
