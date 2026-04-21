@@ -2592,6 +2592,75 @@
         ];
         const STANDARD_CAMERA_FPS = [120, 90, 72, 60, 50, 48, 30, 25, 24, 20, 15, 10, 5];
 
+        /** width/height; drivers sometimes leak pixel dimensions here (e.g. 1280), which must not be used as a ratio. */
+        const CAMERA_ASPECT_RATIO_MIN = 0.35;
+        const CAMERA_ASPECT_RATIO_MAX = 4;
+
+        function sanitizeCapabilityAspectRatio(value) {
+            if (value == null || !Number.isFinite(value)) return null;
+            if (value < CAMERA_ASPECT_RATIO_MIN || value > CAMERA_ASPECT_RATIO_MAX) return null;
+            return value;
+        }
+
+        /**
+         * Prefer aspectRatio.max when advertised — typically the widest (full horizontal FOV) mode on laptop / Continuity cameras.
+         * Falls back to 16:9 when the driver omits aspectRatio or reports invalid values (seen on some macOS builds).
+         */
+        function getPreferredNativeAspectRatioForCaps(caps) {
+            const ar = caps && caps.aspectRatio;
+            if (!ar) return 16 / 9;
+            const hi = sanitizeCapabilityAspectRatio(ar.max);
+            const lo = sanitizeCapabilityAspectRatio(ar.min);
+            if (hi != null) return hi;
+            if (lo != null) return lo;
+            return 16 / 9;
+        }
+
+        function approxSameAspectRatio(w, h, caps, tol = 0.028) {
+            const pref = getPreferredNativeAspectRatioForCaps(caps);
+            return Math.abs(w / h - pref) < tol;
+        }
+
+        /**
+         * Largest (w,h) at the preferred native aspect ratio that fits caps — avoids bogus maxW×maxH squares from independent width/height ranges.
+         */
+        function deriveMaxPixelsAtPreferredNativeAspect(caps) {
+            if (!caps || caps.width == null || caps.height == null) return null;
+            const wMin = caps.width.min != null ? caps.width.min : 1;
+            const wMax = caps.width.max != null ? caps.width.max : 1920;
+            const hMin = caps.height.min != null ? caps.height.min : 1;
+            const hMax = caps.height.max != null ? caps.height.max : 1080;
+            const pref = getPreferredNativeAspectRatioForCaps(caps);
+            const maxW = Math.floor(wMax);
+            const maxH = Math.floor(hMax);
+            let best = null;
+            let bestArea = -1;
+            const consider = (w, h) => {
+                const wf = Math.floor(w);
+                const hf = Math.floor(h);
+                if (wf < 16 || hf < 16) return;
+                if (wf < wMin || wf > wMax || hf < hMin || hf > hMax) return;
+                if (!approxSameAspectRatio(wf, hf, caps)) return;
+                const area = wf * hf;
+                if (area > bestArea) {
+                    bestArea = area;
+                    best = { w: wf, h: hf };
+                }
+            };
+            consider(maxW, Math.round(maxW / pref));
+            consider(Math.round(maxH * pref), maxH);
+            return best;
+        }
+
+        function compareResolutionChoicesNativeFirst(a, b, caps) {
+            const pref = getPreferredNativeAspectRatioForCaps(caps);
+            const tol = 0.028;
+            const ma = Math.abs(a.w / a.h - pref) < tol;
+            const mb = Math.abs(b.w / b.h - pref) < tol;
+            if (ma !== mb) return ma ? -1 : 1;
+            return b.w * b.h - a.w * a.h;
+        }
+
         function buildResolutionChoices(caps) {
             if (!caps || caps.width == null || caps.height == null) {
                 return [];
@@ -2606,16 +2675,33 @@
                     out.push({ w, h });
                 }
             }
+            const derived = deriveMaxPixelsAtPreferredNativeAspect(caps);
+            if (
+                derived &&
+                !out.some((p) => p.w === derived.w && p.h === derived.h)
+            ) {
+                out.push({ w: derived.w, h: derived.h });
+            }
+            out.sort((a, b) => compareResolutionChoicesNativeFirst(a, b, caps));
             const maxW = Math.floor(wMax);
             const maxH = Math.floor(hMax);
-            if (maxW >= wMin && maxH >= hMin && !out.some((p) => p.w === maxW && p.h === maxH)) {
-                out.unshift({ w: maxW, h: maxH });
-            }
-            out.sort((a, b) => b.w * b.h - a.w * a.h);
             if (out.length === 0 && maxW > 0 && maxH > 0) {
-                out.push({ w: maxW, h: maxH });
+                const fallback = deriveMaxPixelsAtPreferredNativeAspect(caps);
+                if (fallback) {
+                    out.push(fallback);
+                } else if (maxW >= wMin && maxH >= hMin) {
+                    out.push({ w: maxW, h: maxH });
+                }
             }
             return out;
+        }
+
+        /** Matches the default entry in resolution dropdown — max pixels at preferred native aspect when possible. */
+        function getIdealMaxNativeDimensionsFromCaps(caps) {
+            const choices = buildResolutionChoices(caps);
+            if (!choices.length) return null;
+            const first = choices[0];
+            return { w: first.w, h: first.h };
         }
 
         /** WebM/VP9 bitrate scales with resolution (5K+ needs much more than 1080p). */
@@ -2740,7 +2826,7 @@
                 if (prevRes && keys.has(prevRes)) {
                     cameraResolutionSelect.value = prevRes;
                 } else {
-                    /* buildResolutionChoices sorts by pixel count descending — first = highest supported. */
+                    /* buildResolutionChoices: native aspect (max FOV) first, then max pixel count. */
                     cameraResolutionSelect.selectedIndex = 0;
                 }
             }
@@ -2793,13 +2879,19 @@
                 const parts = resVal.toLowerCase().split('x');
                 const w = parseInt(parts[0], 10);
                 const h = parseInt(parts[1], 10);
-                if (Number.isFinite(w) && Number.isFinite(h)) {
+                if (Number.isFinite(w) && Number.isFinite(h) && w >= 16 && h >= 16) {
                     videoConstraints.width = { ideal: w };
                     videoConstraints.height = { ideal: h };
                 }
             } else if (caps && caps.width && caps.height) {
-                videoConstraints.width = { ideal: caps.width.max };
-                videoConstraints.height = { ideal: caps.height.max };
+                const ideal = getIdealMaxNativeDimensionsFromCaps(caps);
+                if (ideal) {
+                    videoConstraints.width = { ideal: ideal.w };
+                    videoConstraints.height = { ideal: ideal.h };
+                } else {
+                    videoConstraints.width = { ideal: caps.width.max };
+                    videoConstraints.height = { ideal: caps.height.max };
+                }
             }
 
             const fpsVal = cameraFpsSelect && cameraFpsSelect.value;
@@ -2816,7 +2908,10 @@
             }
 
             if (!(resVal && resVal.includes('x')) && caps && caps.aspectRatio) {
-                videoConstraints.aspectRatio = { ideal: caps.aspectRatio.max };
+                const arIdeal = sanitizeCapabilityAspectRatio(caps.aspectRatio.max);
+                if (arIdeal != null) {
+                    videoConstraints.aspectRatio = { ideal: arIdeal };
+                }
             }
 
             return videoConstraints;
@@ -4163,7 +4258,10 @@
             }
         }
 
-        /** Prefer explicit resolution/FPS from the constraint dropdowns so the info block matches the top bar; fall back to track getSettings() for default / empty selects. */
+        /**
+         * Metrics for the device info line: prefer the active negotiated stream (getSettings + video element),
+         * then dropdown — so bogus constraint labels (e.g. bad driver caps) never hide the real running resolution.
+         */
         function resolveCameraInfoMetrics(settingsFromTrack = null) {
             const trackSettings =
                 settingsFromTrack ||
@@ -4175,29 +4273,59 @@
 
             let w;
             let h;
-            const resVal = cameraResolutionSelect && cameraResolutionSelect.value;
-            if (resVal && String(resVal).toLowerCase().includes('x')) {
-                const parts = String(resVal).toLowerCase().split('x');
-                const pw = parseInt(parts[0], 10);
-                const ph = parseInt(parts[1], 10);
-                if (Number.isFinite(pw) && Number.isFinite(ph)) {
-                    w = pw;
-                    h = ph;
+
+            const tw =
+                trackSettings && Number.isFinite(trackSettings.width) ? trackSettings.width : NaN;
+            const th =
+                trackSettings && Number.isFinite(trackSettings.height) ? trackSettings.height : NaN;
+            if (tw >= 16 && th >= 16) {
+                w = tw;
+                h = th;
+            } else if (
+                video &&
+                video.videoWidth > 0 &&
+                video.videoHeight > 0
+            ) {
+                w = video.videoWidth;
+                h = video.videoHeight;
+            } else {
+                const resVal = cameraResolutionSelect && cameraResolutionSelect.value;
+                if (resVal && String(resVal).toLowerCase().includes('x')) {
+                    const parts = String(resVal).toLowerCase().split('x');
+                    const pw = parseInt(parts[0], 10);
+                    const ph = parseInt(parts[1], 10);
+                    if (
+                        Number.isFinite(pw) &&
+                        Number.isFinite(ph) &&
+                        pw >= 16 &&
+                        ph >= 16
+                    ) {
+                        w = pw;
+                        h = ph;
+                    }
                 }
-            }
-            if (!Number.isFinite(w) && trackSettings) {
-                w = trackSettings.width;
-                h = trackSettings.height;
+                if (!Number.isFinite(w) && trackSettings) {
+                    w = trackSettings.width;
+                    h = trackSettings.height;
+                }
             }
 
             let frameRate;
-            const fpsVal = cameraFpsSelect && cameraFpsSelect.value;
-            if (fpsVal != null && String(fpsVal).length > 0) {
-                const pf = parseFloat(String(fpsVal).replace(',', '.'));
-                if (Number.isFinite(pf)) frameRate = pf;
-            }
-            if (!Number.isFinite(frameRate) && trackSettings) {
-                frameRate = trackSettings.frameRate;
+            const fpsFromTrack =
+                trackSettings && Number.isFinite(trackSettings.frameRate)
+                    ? trackSettings.frameRate
+                    : NaN;
+            if (Number.isFinite(fpsFromTrack) && fpsFromTrack > 0) {
+                frameRate = fpsFromTrack;
+            } else {
+                const fpsVal = cameraFpsSelect && cameraFpsSelect.value;
+                if (fpsVal != null && String(fpsVal).length > 0) {
+                    const pf = parseFloat(String(fpsVal).replace(',', '.'));
+                    if (Number.isFinite(pf)) frameRate = pf;
+                }
+                if (!Number.isFinite(frameRate) && trackSettings) {
+                    frameRate = trackSettings.frameRate;
+                }
             }
 
             return { w, h, frameRate };
@@ -6989,6 +7117,19 @@
         });
 
         initializeDevices();
+
+        if (video) {
+            video.addEventListener('loadedmetadata', () => {
+                const vt = currentStream && currentStream.getVideoTracks()[0];
+                const st = vt && vt.getSettings ? vt.getSettings() : null;
+                updateDeviceInfo(st);
+            });
+            video.addEventListener('resize', () => {
+                const vt = currentStream && currentStream.getVideoTracks()[0];
+                const st = vt && vt.getSettings ? vt.getSettings() : null;
+                updateDeviceInfo(st);
+            });
+        }
 
         // Initialize toggle UI once DOM is ready.
         updateMirrorToggleUI();
