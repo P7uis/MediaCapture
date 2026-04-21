@@ -2984,24 +2984,54 @@
             }, 8000);
         }
 
+        /** Firefox (and HTTPS) resolves <a download> blobs asynchronously — never revokeObjectURL in the same turn as click(). */
+        const MC_BLOB_URL_REVOKE_DELAY_MS = 120000;
+
+        function triggerProgrammaticDownload(blobOrFile, suggestedFilename) {
+            const url = URL.createObjectURL(blobOrFile);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = suggestedFilename;
+            document.body.appendChild(a);
+            requestAnimationFrame(() => {
+                try {
+                    a.click();
+                } finally {
+                    setTimeout(() => {
+                        try {
+                            a.remove();
+                        } catch (e) {}
+                    }, 0);
+                }
+            });
+            setTimeout(() => {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch (e) {}
+            }, MC_BLOB_URL_REVOKE_DELAY_MS);
+        }
+
         async function finalizeOpfsRecordingToDownload(fileHandle, downloadName, dispose) {
             try {
                 if (!fileHandle) return;
                 const file = await fileHandle.getFile();
-                const url = URL.createObjectURL(file);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = downloadName;
-                document.body.appendChild(a);
-                a.click();
-                URL.revokeObjectURL(url);
+                triggerProgrammaticDownload(file, downloadName);
+                if (dispose) {
+                    const d = dispose;
+                    setTimeout(() => {
+                        void (async () => {
+                            try {
+                                await d();
+                            } catch (e) {}
+                        })();
+                    }, MC_BLOB_URL_REVOKE_DELAY_MS);
+                }
             } catch (e) {
                 console.warn('OPFS recording finalize download:', e);
-            } finally {
                 try {
                     if (dispose) await dispose();
-                } catch (e) {}
+                } catch (e2) {}
             }
         }
 
@@ -4296,14 +4326,7 @@
                                 }
                             } else {
                                 const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = getTimestamp() + 'video.webm';
-                                document.body.appendChild(a);
-                                a.click();
-                                URL.revokeObjectURL(url);
+                                triggerProgrammaticDownload(blob, getTimestamp() + 'video.webm');
                             }
                         } catch (e) {
                             console.error('Camera recording finalize:', e);
@@ -4326,14 +4349,7 @@
                             if (recordedChunks.length > 0) {
                                 try {
                                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.style.display = 'none';
-                                    a.href = url;
-                                    a.download = getTimestamp() + 'video-fallback.webm';
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                                    triggerProgrammaticDownload(blob, getTimestamp() + 'video-fallback.webm');
                                 } catch (e3) {}
                             }
                         } finally {
@@ -5061,14 +5077,7 @@
                                 }
                             } else {
                                 const blob = new Blob(screenRecordedChunks, { type: 'video/webm' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = getTimestamp() + 'screen.webm';
-                                document.body.appendChild(a);
-                                a.click();
-                                URL.revokeObjectURL(url);
+                                triggerProgrammaticDownload(blob, getTimestamp() + 'screen.webm');
                             }
                         } catch (e) {
                             console.error('Screen recording finalize:', e);
@@ -5091,14 +5100,7 @@
                             if (screenRecordedChunks.length > 0) {
                                 try {
                                     const blob = new Blob(screenRecordedChunks, { type: 'video/webm' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.style.display = 'none';
-                                    a.href = url;
-                                    a.download = getTimestamp() + 'screen-fallback.webm';
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                                    triggerProgrammaticDownload(blob, getTimestamp() + 'screen-fallback.webm');
                                 } catch (e3) {}
                             }
                         } finally {
@@ -5383,14 +5385,7 @@
                                 } else if (!suppress) {
                                     const chunkCopy = audioChunks.slice();
                                     const blob = new Blob(chunkCopy, { type: mime });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.style.display = 'none';
-                                    a.href = url;
-                                    a.download = getTimestamp() + 'audio.webm';
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                                    triggerProgrammaticDownload(blob, getTimestamp() + 'audio.webm');
                                 }
                             } catch (e) {
                                 console.error('Audio recording finalize:', e);
@@ -5413,14 +5408,7 @@
                                 if (!suppress && audioChunks.length > 0) {
                                     try {
                                         const blob = new Blob(audioChunks.slice(), { type: mime });
-                                        const url = URL.createObjectURL(blob);
-                                        const a = document.createElement('a');
-                                        a.style.display = 'none';
-                                        a.href = url;
-                                        a.download = getTimestamp() + 'audio-fallback.webm';
-                                        document.body.appendChild(a);
-                                        a.click();
-                                        URL.revokeObjectURL(url);
+                                        triggerProgrammaticDownload(blob, getTimestamp() + 'audio-fallback.webm');
                                     } catch (e3) {}
                                 }
                             } finally {
@@ -5476,12 +5464,7 @@
 
                 canvas.toBlob((blob) => {
                     if (!blob) return;
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = getTimestamp() + 'photo.png';
-                    a.click();
-                    URL.revokeObjectURL(url);
+                    triggerProgrammaticDownload(blob, getTimestamp() + 'photo.png');
                 }, 'image/png');
             }
         }
@@ -5530,6 +5513,8 @@
             const playbackFps = getStopMotionExportFps();
 
             const sink = await openRecordingDiskSink(getTimestamp() + 'stopmotion.webm');
+            const smDiskFh = sink.mode === 'disk' ? sink.fileHandle : null;
+            const smDiskDisp = sink.mode === 'disk' ? sink.opfsDispose : null;
             const smNoticeEl = document.getElementById('recordingStatusNotice');
             if (smNoticeEl) {
                 smNoticeEl.hidden = true;
@@ -5600,17 +5585,18 @@
                             await diskAppender.flush();
                             await writableRef.close();
                             writable = null;
-                            showRecordingStatusNotice(t('recordingSavedToDisk'), false);
+                            if (smDiskFh && smDiskDisp) {
+                                await finalizeOpfsRecordingToDownload(
+                                    smDiskFh,
+                                    getTimestamp() + 'stopmotion.webm',
+                                    smDiskDisp
+                                );
+                            } else {
+                                showRecordingStatusNotice(t('recordingSavedToDisk'), false);
+                            }
                         } else {
                             const blob = new Blob(chunks, { type: 'video/webm' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.style.display = 'none';
-                            a.href = url;
-                            a.download = getTimestamp() + 'stopmotion.webm';
-                            document.body.appendChild(a);
-                            a.click();
-                            URL.revokeObjectURL(url);
+                            triggerProgrammaticDownload(blob, getTimestamp() + 'stopmotion.webm');
                         }
                     } catch (e) {
                         console.error('Stop motion export finalize:', e);
@@ -5624,14 +5610,7 @@
                         if (chunks.length > 0) {
                             try {
                                 const blob = new Blob(chunks, { type: 'video/webm' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = getTimestamp() + 'stopmotion-fallback.webm';
-                                document.body.appendChild(a);
-                                a.click();
-                                URL.revokeObjectURL(url);
+                                triggerProgrammaticDownload(blob, getTimestamp() + 'stopmotion-fallback.webm');
                             } catch (e3) {}
                         }
                     } finally {
@@ -5948,6 +5927,8 @@
             }
 
             const sink = await openRecordingDiskSink(getTimestamp() + 'timelapse.webm');
+            const tlDiskFh = sink.mode === 'disk' ? sink.fileHandle : null;
+            const tlDiskDisp = sink.mode === 'disk' ? sink.opfsDispose : null;
             const tlNoticeEl = document.getElementById('recordingStatusNotice');
             if (tlNoticeEl) {
                 tlNoticeEl.hidden = true;
@@ -5998,17 +5979,18 @@
                             await diskAppender.flush();
                             await writableRef.close();
                             writable = null;
-                            showRecordingStatusNotice(t('recordingSavedToDisk'), false);
+                            if (tlDiskFh && tlDiskDisp) {
+                                await finalizeOpfsRecordingToDownload(
+                                    tlDiskFh,
+                                    getTimestamp() + 'timelapse.webm',
+                                    tlDiskDisp
+                                );
+                            } else {
+                                showRecordingStatusNotice(t('recordingSavedToDisk'), false);
+                            }
                         } else {
                             const blob = new Blob(chunks, { type: 'video/webm' });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.style.display = 'none';
-                            a.href = url;
-                            a.download = getTimestamp() + 'timelapse.webm';
-                            document.body.appendChild(a);
-                            a.click();
-                            URL.revokeObjectURL(url);
+                            triggerProgrammaticDownload(blob, getTimestamp() + 'timelapse.webm');
                         }
                     } catch (e) {
                         console.error('Timelapse export finalize:', e);
@@ -6022,14 +6004,7 @@
                         if (chunks.length > 0) {
                             try {
                                 const blob = new Blob(chunks, { type: 'video/webm' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = getTimestamp() + 'timelapse-fallback.webm';
-                                document.body.appendChild(a);
-                                a.click();
-                                URL.revokeObjectURL(url);
+                                triggerProgrammaticDownload(blob, getTimestamp() + 'timelapse-fallback.webm');
                             } catch (e3) {}
                         }
                     } finally {
@@ -6420,14 +6395,7 @@
                                 }
                             } else {
                                 const blob = new Blob(streamCaptureChunks, { type: 'video/webm' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = getTimestamp() + 'stream.webm';
-                                document.body.appendChild(a);
-                                a.click();
-                                URL.revokeObjectURL(url);
+                                triggerProgrammaticDownload(blob, getTimestamp() + 'stream.webm');
                             }
                         } catch (e) {
                             console.error('Stream capture recording finalize:', e);
@@ -6450,14 +6418,7 @@
                             if (streamCaptureChunks.length > 0) {
                                 try {
                                     const blob = new Blob(streamCaptureChunks, { type: 'video/webm' });
-                                    const url = URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.style.display = 'none';
-                                    a.href = url;
-                                    a.download = getTimestamp() + 'stream-fallback.webm';
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    URL.revokeObjectURL(url);
+                                    triggerProgrammaticDownload(blob, getTimestamp() + 'stream-fallback.webm');
                                 } catch (e3) {}
                             }
                         } finally {
