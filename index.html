@@ -258,6 +258,29 @@
             border: 1px solid var(--mc-card-border);
             transition: background-color 0.2s ease, border-color 0.2s ease;
         }
+        .camera-constraints-fields {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 12px 16px;
+            min-width: 0;
+        }
+        .camera-constraints-progress {
+            width: 100%;
+            min-width: 0;
+            max-width: none;
+            margin-left: 0;
+            align-self: center;
+            box-sizing: border-box;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+        .camera-constraints-progress.progress-container--active {
+            visibility: visible;
+            opacity: 1;
+        }
         .camera-constraint-field {
             display: flex;
             flex-direction: column;
@@ -602,6 +625,29 @@
             margin-top: 12px;
             color: var(--mc-muted);
         }
+        .camera-constraints-progress.progress-container {
+            margin-top: 0;
+            color: var(--mc-muted);
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+        }
+        .camera-constraints-progress .progress-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+        .camera-constraints-progress .progress-prefix {
+            flex: 0 0 auto;
+            font-size: 11px;
+            white-space: nowrap;
+            color: var(--mc-muted);
+        }
+        .camera-constraints-progress .progress-bar {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
 
         .progress-bar {
             height: 8px;
@@ -618,10 +664,25 @@
             width: 0;
             transition: width 0.2s ease;
         }
+        .progress-bar span.progress-bar--indeterminate {
+            width: 32%;
+            animation: mc-progress-indeterminate 1.1s ease-in-out infinite;
+        }
+        @keyframes mc-progress-indeterminate {
+            0% {
+                transform: translateX(-120%);
+            }
+            100% {
+                transform: translateX(340%);
+            }
+        }
 
         .progress-text {
             margin-top: 6px;
             font-size: 12px;
+        }
+        .camera-constraints-progress .progress-text {
+            display: none;
         }
         .controls {
             margin-bottom: 20px;
@@ -1277,6 +1338,29 @@
                 align-items: flex-start;
                 gap: 20px;
             }
+            .camera-constraints-bar {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) clamp(240px, min(600px, 58vw), 600px);
+                align-items: flex-end;
+                column-gap: 20px;
+            }
+            .camera-constraints-fields {
+                grid-column: 1;
+                justify-content: center;
+                width: calc(100% - var(--mc-preview-right-offset, 62px));
+                max-width: 100%;
+                margin-right: var(--mc-preview-right-offset, 62px);
+            }
+            .camera-constraints-progress {
+                grid-column: 2;
+                width: 100%;
+                max-width: none;
+                justify-self: stretch;
+                margin-left: 0;
+                align-self: center;
+                padding-left: 8px;
+                box-sizing: border-box;
+            }
             .media-column {
                 flex: 1 1 0;
             }
@@ -1360,6 +1444,12 @@
                 margin-bottom: 8px;
                 padding: 8px 6px;
                 gap: 8px 10px;
+            }
+            .camera-constraints-progress {
+                flex: 1 1 100%;
+                width: 100%;
+                max-width: 100%;
+                margin-left: 0;
             }
             .main-workspace {
                 gap: 8px;
@@ -1945,13 +2035,24 @@
 
     <div class="container">
         <div class="camera-constraints-bar" id="cameraConstraintsBar" data-i18n-aria="ariaCameraBar">
-            <div class="camera-constraint-field">
-                <label for="cameraResolutionSelect" data-i18n="labelResolution">Resolutie</label>
-                <select id="cameraResolutionSelect" data-i18n-aria="ariaCameraResolution"></select>
+            <div class="camera-constraints-fields">
+                <div class="camera-constraint-field">
+                    <label for="cameraResolutionSelect" data-i18n="labelResolution">Resolutie</label>
+                    <select id="cameraResolutionSelect" data-i18n-aria="ariaCameraResolution"></select>
+                </div>
+                <div class="camera-constraint-field">
+                    <label for="cameraFpsSelect" data-i18n="labelFps">Beeldsnelheid (fps)</label>
+                    <select id="cameraFpsSelect" data-i18n-aria="ariaCameraFps"></select>
+                </div>
             </div>
-            <div class="camera-constraint-field">
-                <label for="cameraFpsSelect" data-i18n="labelFps">Beeldsnelheid (fps)</label>
-                <select id="cameraFpsSelect" data-i18n-aria="ariaCameraFps"></select>
+            <div class="progress-container camera-constraints-progress" id="progressContainer" aria-hidden="true">
+                <div class="progress-row">
+                    <span class="progress-prefix" data-i18n="progressSavingInProgress">Saving in progress</span>
+                    <div class="progress-bar">
+                        <span id="progressBar"></span>
+                    </div>
+                </div>
+                <div id="progressText" class="progress-text"></div>
             </div>
         </div>
         <p class="camera-android-usb-hint" id="androidUsbCameraHint" data-i18n="androidUsbCameraHint" hidden></p>
@@ -2080,12 +2181,6 @@
             </div>
         </div>
 
-        <div class="progress-container" id="progressContainer" style="display:none;">
-            <div class="progress-bar">
-                <span id="progressBar"></span>
-            </div>
-            <div id="progressText" class="progress-text"></div>
-        </div>
     </div>
 
     <script>
@@ -2126,6 +2221,7 @@
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
+        const progressBarTrack = progressBar ? progressBar.parentElement : null;
         const cameraInfo = document.getElementById('cameraInfo');
         const micInfo = document.getElementById('micInfo');
         const zoomSlider = document.getElementById('zoomSlider');
@@ -2199,6 +2295,12 @@
                 ariaTimelapseProgress: 'Timelapse-voortgang',
                 labelTimelapseRecord: 'Opname',
                 labelTimelapsePlayback: 'Afspelen',
+                progressPreparing: 'Voorbereiden',
+                progressRenderingTimelapse: 'Timelapse renderen',
+                progressRenderingStopMotion: 'Stop motion renderen',
+                progressSavingInProgress: 'Opslaan bezig',
+                progressSavingFile: 'Bestand opslaan',
+                progressDone: 'Klaar',
                 resolutionDefault: 'Standaard',
                 unknownDevice: 'Onbekend',
                 prefixCamera: 'Geselecteerde camera: {label}',
@@ -2293,6 +2395,12 @@
                 ariaTimelapseProgress: 'Timelapse progress',
                 labelTimelapseRecord: 'Recording',
                 labelTimelapsePlayback: 'Playback',
+                progressPreparing: 'Preparing',
+                progressRenderingTimelapse: 'Rendering timelapse',
+                progressRenderingStopMotion: 'Rendering stop motion',
+                progressSavingInProgress: 'Saving in progress',
+                progressSavingFile: 'Saving file',
+                progressDone: 'Done',
                 resolutionDefault: 'Default',
                 unknownDevice: 'Unknown',
                 prefixCamera: 'Selected camera: {label}',
@@ -2387,6 +2495,12 @@
                 ariaTimelapseProgress: 'Zeitraffer-Fortschritt',
                 labelTimelapseRecord: 'Aufnahme',
                 labelTimelapsePlayback: 'Wiedergabe',
+                progressPreparing: 'Vorbereiten',
+                progressRenderingTimelapse: 'Zeitraffer rendern',
+                progressRenderingStopMotion: 'Stop Motion rendern',
+                progressSavingInProgress: 'Speichern laeuft',
+                progressSavingFile: 'Datei speichern',
+                progressDone: 'Fertig',
                 resolutionDefault: 'Standard',
                 unknownDevice: 'Unbekannt',
                 prefixCamera: 'Ausgewählte Kamera: {label}',
@@ -2486,6 +2600,20 @@
                 toggleTimelapseButton.textContent = t(shortKey);
             }
             toggleTimelapseButton.title = t(fullKey);
+        }
+
+        function syncConstraintsCenteringOffset() {
+            if (!zoomColumn || !previewRow) return;
+            const wideLayout = window.matchMedia('(min-width: 960px), (orientation: landscape) and (max-width: 959px)').matches;
+            if (!wideLayout) {
+                document.documentElement.style.removeProperty('--mc-preview-right-offset');
+                return;
+            }
+            const rowStyle = getComputedStyle(previewRow);
+            const gapRaw = rowStyle.columnGap && rowStyle.columnGap !== 'normal' ? rowStyle.columnGap : rowStyle.gap;
+            const gapPx = parseFloat(gapRaw || '0') || 0;
+            const offsetPx = Math.max(0, Math.round((zoomColumn.offsetWidth || 0) + gapPx));
+            document.documentElement.style.setProperty('--mc-preview-right-offset', `${offsetPx}px`);
         }
 
         function updateAndroidUsbHintVisibility() {
@@ -3083,6 +3211,9 @@
         const RECORDING_TIMESLICE_MS = 500;
         let recordingStatusNoticeTimer = null;
         let recordingMemoryHintShown = false;
+        let globalProgressToken = 0;
+        let globalProgressHideTimer = null;
+        const DEBUG_FORCE_PROGRESS_VISIBLE = false; // Keep visible until user says: themonkeyisready
 
         let cameraRecordClockTimer = null;
         let cameraRecordElapsedBaseMs = 0;
@@ -3122,6 +3253,59 @@
                 el.classList.remove('recording-status-notice--error');
                 recordingStatusNoticeTimer = null;
             }, 8000);
+        }
+
+        function showGlobalProgress(label, percent = null, token = null) {
+            if (!progressContainer || !progressBar || !progressText) return token || 0;
+            if (token == null) {
+                globalProgressToken += 1;
+                token = globalProgressToken;
+            } else if (token !== globalProgressToken) {
+                return token;
+            }
+            if (globalProgressHideTimer) {
+                clearTimeout(globalProgressHideTimer);
+                globalProgressHideTimer = null;
+            }
+            progressContainer.classList.add('progress-container--active');
+            progressContainer.setAttribute('aria-hidden', 'false');
+            const hasPct = Number.isFinite(percent);
+            const pct = hasPct ? Math.max(0, Math.min(100, Math.round(percent))) : null;
+            progressBar.classList.toggle('progress-bar--indeterminate', !hasPct);
+            progressBar.style.width = hasPct ? `${pct}%` : '100%';
+            progressText.textContent = hasPct ? `${label} (${pct}%)` : label;
+            if (progressBarTrack) progressBarTrack.setAttribute('aria-valuenow', hasPct ? String(pct) : '0');
+            return token;
+        }
+
+        function hideGlobalProgress(token = null, delayMs = 0) {
+            if (!progressContainer || !progressBar || !progressText) return;
+            if (DEBUG_FORCE_PROGRESS_VISIBLE) return;
+            if (token != null && token !== globalProgressToken) return;
+            if (globalProgressHideTimer) {
+                clearTimeout(globalProgressHideTimer);
+                globalProgressHideTimer = null;
+            }
+            const run = () => {
+                if (token != null && token !== globalProgressToken) return;
+                progressContainer.classList.remove('progress-container--active');
+                progressContainer.setAttribute('aria-hidden', 'true');
+                progressBar.classList.remove('progress-bar--indeterminate');
+                progressBar.style.width = '0%';
+                progressText.textContent = '';
+            };
+            if (delayMs > 0) {
+                globalProgressHideTimer = setTimeout(run, delayMs);
+            } else {
+                run();
+            }
+        }
+
+        // Debug mode: keep progress UI pinned visible.
+        if (DEBUG_FORCE_PROGRESS_VISIBLE && progressContainer) {
+            progressContainer.classList.add('progress-container--active');
+            progressContainer.setAttribute('aria-hidden', 'false');
+            if (progressText) progressText.textContent = t('progressSavingFile');
         }
 
         /** Firefox (and HTTPS) resolves <a download> blobs asynchronously — never revokeObjectURL in the same turn as click(). */
@@ -4120,6 +4304,7 @@
             const show = !!stopMotionLastFrameOverlayEnabled;
             stopMotionOverlayOpacityGroup.hidden = !show;
             stopMotionOverlayOpacityGroup.setAttribute('aria-hidden', show ? 'false' : 'true');
+            requestAnimationFrame(syncConstraintsCenteringOffset);
             if (stopMotionOverlayOpacitySlider) {
                 stopMotionOverlayOpacitySlider.disabled = !show || stopMotionEncoding;
                 stopMotionOverlayOpacitySlider.tabIndex = show ? 0 : -1;
@@ -4495,6 +4680,7 @@
 
                 mediaRecorder.onstop = () => {
                     void (async () => {
+                        const progressToken = showGlobalProgress(t('progressSavingFile'));
                         const writableRef = cameraRecordingWritable;
                         const diskMode = cameraRecordingDiskMode;
                         try {
@@ -4544,6 +4730,8 @@
                                 } catch (e3) {}
                             }
                         } finally {
+                            showGlobalProgress(t('progressDone'), 100, progressToken);
+                            hideGlobalProgress(progressToken, 900);
                             cleanupCameraRecordingArtifacts();
                         }
                     })();
@@ -5246,6 +5434,7 @@
 
                 screenMediaRecorder.onstop = () => {
                     void (async () => {
+                        const progressToken = showGlobalProgress(t('progressSavingFile'));
                         const writableRef = screenRecordingWritable;
                         const diskMode = screenRecordingDiskMode;
                         try {
@@ -5295,6 +5484,8 @@
                                 } catch (e3) {}
                             }
                         } finally {
+                            showGlobalProgress(t('progressDone'), 100, progressToken);
+                            hideGlobalProgress(progressToken, 900);
                             cleanupScreenRecordingArtifacts();
                         }
                     })();
@@ -5535,6 +5726,7 @@
 
                     rec.onstop = () => {
                         void (async () => {
+                            const progressToken = showGlobalProgress(t('progressSavingFile'));
                             const suppress = suppressAudioDownload;
                             suppressAudioDownload = false;
                             const writableRef = audioRecordingWritable;
@@ -5611,6 +5803,12 @@
                                 } catch (e) {}
                                 audioRecorder = null;
                                 audioChunks = [];
+                                if (!suppress) {
+                                    showGlobalProgress(t('progressDone'), 100, progressToken);
+                                    hideGlobalProgress(progressToken, 900);
+                                } else {
+                                    hideGlobalProgress(progressToken);
+                                }
                             }
                         })();
                     };
@@ -5655,7 +5853,10 @@
 
                 canvas.toBlob((blob) => {
                     if (!blob) return;
+                    const progressToken = showGlobalProgress(t('progressSavingFile'));
                     triggerProgrammaticDownload(blob, getTimestamp() + 'photo.png');
+                    showGlobalProgress(t('progressDone'), 100, progressToken);
+                    hideGlobalProgress(progressToken, 700);
                 }, 'image/png');
             }
         }
@@ -5700,6 +5901,7 @@
 
         async function saveStopMotionVideo() {
             if (stopMotionEncoding || getStopMotionFrameCount() === 0 || !stopMotionFrameStore) return;
+            const progressToken = showGlobalProgress(t('progressPreparing'), 0);
 
             const playbackFps = getStopMotionExportFps();
 
@@ -5713,6 +5915,7 @@
             }
             if (sink.mode === 'cancelled') {
                 showRecordingStatusNotice(t('recordingSaveCancelled'), false);
+                hideGlobalProgress(progressToken);
                 return;
             }
 
@@ -5722,6 +5925,7 @@
 
             stopMotionEncoding = true;
             updateStopMotionUi();
+            showGlobalProgress(t('progressRenderingStopMotion'), 2, progressToken);
 
             const dim = storeRef.getCanvasDimensions();
             const outCanvas = document.createElement('canvas');
@@ -5757,6 +5961,7 @@
                 } catch (e2) {}
                 stopMotionEncoding = false;
                 updateStopMotionUi();
+                hideGlobalProgress(progressToken);
                 return;
             }
 
@@ -5817,6 +6022,8 @@
                         stopMotionEncoding = false;
                         updateStopMotionUi();
                         await refreshStopMotionOverlayPreview();
+                        showGlobalProgress(t('progressDone'), 100, progressToken);
+                        hideGlobalProgress(progressToken, 900);
                     }
                 })();
             };
@@ -5835,6 +6042,7 @@
                 } catch (e2) {}
                 stopMotionEncoding = false;
                 updateStopMotionUi();
+                hideGlobalProgress(progressToken);
                 return;
             }
 
@@ -5862,7 +6070,10 @@
                     for (let idx = 1; idx < frameCount; idx++) {
                         await new Promise((r) => setTimeout(r, frameIntervalMs));
                         await drawStoredFrameToCanvas(storeRef, idx, outCtx, outCanvas.width, outCanvas.height);
+                        const pct = Math.max(2, Math.min(92, Math.round(((idx + 1) / frameCount) * 92)));
+                        showGlobalProgress(t('progressRenderingStopMotion'), pct, progressToken);
                     }
+                    showGlobalProgress(t('progressSavingFile'), 95, progressToken);
                     await new Promise((r) => setTimeout(r, Math.max(120, frameIntervalMs * 2, RECORDING_TIMESLICE_MS * 2)));
                     try {
                         if (typeof recorder.requestData === 'function') {
@@ -6110,6 +6321,7 @@
 
             const storeRef = timelapseFrameStore;
             updateTimelapseInfoDuringEncoding(0, frameCount, finalRecordSec);
+            const progressToken = showGlobalProgress(t('progressPreparing'), 0);
 
             const dim = storeRef.getCanvasDimensions();
             const outCanvas = document.createElement('canvas');
@@ -6139,6 +6351,7 @@
             }
             if (sink.mode === 'cancelled') {
                 showRecordingStatusNotice(t('recordingSaveCancelled'), false);
+                hideGlobalProgress(progressToken);
                 await cleanupTimelapseArtifacts();
                 updateCameraConstraintControlsState();
                 return;
@@ -6163,6 +6376,7 @@
                 } catch (e2) {}
                 await cleanupTimelapseArtifacts();
                 updateCameraConstraintControlsState();
+                hideGlobalProgress(progressToken);
                 return;
             }
 
@@ -6222,6 +6436,8 @@
                         timelapseFrameStore = null;
                         timelapseExportInProgress = false;
                         updateTimelapseInfoIdle();
+                        showGlobalProgress(t('progressDone'), 100, progressToken);
+                        hideGlobalProgress(progressToken, 900);
                     }
                 })();
             };
@@ -6230,6 +6446,7 @@
             try {
                 await drawStoredFrameToCanvas(storeRef, 0, outCtx, outCanvas.width, outCanvas.height);
                 updateTimelapseInfoDuringEncoding(1, frameCount, finalRecordSec);
+                showGlobalProgress(t('progressRenderingTimelapse'), Math.max(2, Math.round((1 / frameCount) * 92)), progressToken);
             } catch (e) {
                 console.error('Timelapse export first frame:', e);
                 if (writable) {
@@ -6241,6 +6458,7 @@
                 } catch (e2) {}
                 await cleanupTimelapseArtifacts();
                 updateCameraConstraintControlsState();
+                hideGlobalProgress(progressToken);
                 return;
             }
 
@@ -6258,6 +6476,7 @@
                 } catch (e2) {}
                 await cleanupTimelapseArtifacts();
                 updateCameraConstraintControlsState();
+                hideGlobalProgress(progressToken);
                 return;
             }
             if (!diskMode) {
@@ -6271,7 +6490,10 @@
                         await new Promise((r) => setTimeout(r, frameIntervalMs));
                         await drawStoredFrameToCanvas(storeRef, idx, outCtx, outCanvas.width, outCanvas.height);
                         updateTimelapseInfoDuringEncoding(idx + 1, frameCount, finalRecordSec);
+                        const pct = Math.max(2, Math.min(92, Math.round(((idx + 1) / frameCount) * 92)));
+                        showGlobalProgress(t('progressRenderingTimelapse'), pct, progressToken);
                     }
+                    showGlobalProgress(t('progressSavingFile'), 95, progressToken);
                     await new Promise((r) => setTimeout(r, Math.max(120, frameIntervalMs * 2, RECORDING_TIMESLICE_MS * 2)));
                     try {
                         if (typeof recorder.requestData === 'function') {
@@ -6578,6 +6800,7 @@
 
                 streamCaptureRecorder.onstop = () => {
                     void (async () => {
+                        const progressToken = showGlobalProgress(t('progressSavingFile'));
                         const writableRef = streamCaptureRecordingWritable;
                         const diskMode = streamCaptureRecordingDiskMode;
                         try {
@@ -6627,6 +6850,8 @@
                                 } catch (e3) {}
                             }
                         } finally {
+                            showGlobalProgress(t('progressDone'), 100, progressToken);
+                            hideGlobalProgress(progressToken, 900);
                             if (document.pictureInPictureElement) {
                                 try {
                                     document.exitPictureInPicture();
@@ -7012,8 +7237,10 @@
             timelapsePlaybackFpsInput.addEventListener('change', refreshTimelapseInfo);
         }
         window.addEventListener('resize', updateTimelapseButtonLabel);
+        window.addEventListener('resize', syncConstraintsCenteringOffset);
         updateTimelapseInfoIdle();
         updateTimelapseButtonLabel();
+        syncConstraintsCenteringOffset();
 
         if (stopMotionFrameButton) {
             stopMotionFrameButton.addEventListener('click', () => {
