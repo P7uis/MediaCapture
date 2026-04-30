@@ -19,9 +19,9 @@
     <style>
         :root {
             --mc-bg: #f4f4f4;
-            --mc-fg: #222;
-            --mc-fg-soft: #333;
-            --mc-muted: #555;
+            --mc-fg: #000;
+            --mc-fg-soft: #000;
+            --mc-muted: #000;
             --mc-panel: rgba(255, 255, 255, 0.92);
             --mc-panel-border: rgba(0, 0, 0, 0.12);
             --mc-panel-shadow: rgba(0, 0, 0, 0.08);
@@ -30,9 +30,9 @@
             --mc-input-bg: #fff;
             --mc-input-border: #ccc;
             --mc-input-text: #111;
-            --mc-label: #333;
+            --mc-label: #000;
             --mc-video-border: #ccc;
-            --mc-zoom-text: #222;
+            --mc-zoom-text: #000;
             --mc-await: #aaa;
             --mc-tl-bg: rgba(0, 0, 0, 0.06);
             --mc-tl-border: rgba(0, 0, 0, 0.12);
@@ -699,7 +699,7 @@
             padding: 10px;
             border: none;
             border-radius: 5px;
-            color: white;
+            color: #000;
             cursor: pointer;
             font-size: 14px;
             line-height: 1.2;
@@ -750,7 +750,7 @@
         #recordStartButton.camera-start-btn--pause,
         #recordStartButton.camera-start-btn--resume {
             background-color: #fd7e14;
-            color: #fff;
+            color: #000;
         }
         #recordStartButton.camera-start-btn--pause:hover:not(:disabled),
         #recordStartButton.camera-start-btn--resume:hover:not(:disabled) {
@@ -807,11 +807,11 @@
         #mirrorToggle,
         #mirrorToggle.mirrored {
             background-color: #00ff92;
-            color: #fff;
+            color: #000;
         }
         #mirrorToggle #mirrorToggleText {
-            color: #fff;
-            -webkit-text-fill-color: #fff;
+            color: #000;
+            -webkit-text-fill-color: #000;
         }
         #muteToggle {
             background-color: #000; /* black */
@@ -1165,8 +1165,22 @@
             margin-top: 4px;
         }
         .stopmotion-tools-row button.sm-lastframe-toggle--on {
-            outline: 2px solid var(--mc-accent, #3a7);
-            outline-offset: 1px;
+            box-shadow: inset 0 0 0 2px var(--mc-accent, #3a7);
+        }
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle:not(:disabled),
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle.sm-lastframe-toggle--on,
+        html:not(.mc-theme-dark) #stopMotionDiscardLastButton:not(:disabled) {
+            background-color: #cfd4da;
+        }
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle:hover:not(:disabled),
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle.sm-lastframe-toggle--on:hover:not(:disabled),
+        html:not(.mc-theme-dark) #stopMotionDiscardLastButton:not(:disabled):hover {
+            background-color: #c2c8cf;
+        }
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle:active:not(:disabled),
+        html:not(.mc-theme-dark) #stopMotionOverlayToggle.sm-lastframe-toggle--on:active:not(:disabled),
+        html:not(.mc-theme-dark) #stopMotionDiscardLastButton:not(:disabled):active {
+            background-color: #bcc3cb;
         }
         .stopmotion-tools-row button:disabled {
             opacity: 0.48;
@@ -1238,7 +1252,7 @@
             background-color: rgb(219 52 141);
             flex: 1 1 140px;
             min-width: 0;
-            color: #fff;
+            color: #000;
         }
         #stopMotionFrameButton:hover:not(:disabled) {
             background-color: rgb(200 42 126);
